@@ -4,22 +4,22 @@ Categories are the pipeline's reading of the evidence (record collection / event
 
 | category | rule action | resources in evidence | only in system_activity | main-set cases with a step | labeled samples with a step | status |
 |---|---|---|---|---|---|---|
-| USER_PROFILE | DELETE | 597 | 0 | 472 | 32 | covered |
+| USER_PROFILE | DELETE | 597 | 0 | 473 | 32 | covered |
 | SECONDARY_IDENTIFIER | DELETE | 4 | 0 | 0 | 2 | thin |
-| SEARCH_INDEX_ENTRY | DELETE | 314 | 0 | 269 | 12 | covered |
+| SEARCH_INDEX_ENTRY | DELETE | 314 | 0 | 270 | 12 | covered |
 | CACHE_ENTRY | DELETE | 0 | 284 | 0 | 0 | **no labeled sample** -> synthetic cases |
-| SUPPORT_MESSAGE | REDACT | 170 | 0 | 160 | 8 | covered |
-| SUPPORT_ATTACHMENT | DELETE | 23 | 0 | 19 | 2 | thin |
-| ANALYTICS_PROFILE | ANONYMIZE | 205 | 0 | 173 | 12 | covered |
+| SUPPORT_MESSAGE | REDACT | 170 | 0 | 161 | 8 | covered |
+| SUPPORT_ATTACHMENT | DELETE | 23 | 0 | 20 | 2 | thin |
+| ANALYTICS_PROFILE | ANONYMIZE | 205 | 0 | 174 | 12 | covered |
 | PRODUCT_TELEMETRY | ANONYMIZE | 0 | 0 | 0 | 0 | **no labeled sample** -> synthetic cases |
-| USER_EXPORT | DELETE | 34 | 0 | 30 | 2 | thin |
-| MARKETING_PROFILE | DELETE | 1 | 0 | 0 | 0 | **no labeled sample** -> synthetic cases |
+| USER_EXPORT | DELETE | 34 | 0 | 31 | 2 | thin |
+| MARKETING_PROFILE | DELETE | 1 | 0 | 1 | 0 | **no labeled sample** -> synthetic cases |
 | EMAIL_DELIVERY_LOG | REDACT | 0 | 368 | 0 | 0 | **no labeled sample** -> synthetic cases |
 | SECURITY_AUDIT_LOG | RETAIN | 457 | 0 | 403 | 24 | covered |
 | LEGAL_HOLD_RECORD | RETAIN | 7 | 0 | 7 | 0 | **no labeled sample** -> synthetic cases |
-| BACKUP_ARCHIVE | RETAIN | 65 | 0 | 58 | 6 | covered |
+| BACKUP_ARCHIVE | RETAIN | 65 | 0 | 59 | 6 | covered |
 | ACCOUNT_TOMBSTONE | REDACT | 10 | 0 | 8 | 2 | thin |
-| DATA_FLOW | (fixed by problem statement) | 156 | 0 | 145 | 9 | covered |
+| DATA_FLOW | (fixed by problem statement) | 156 | 0 | 146 | 9 | covered |
 
 Categories with no labeled sample: CACHE_ENTRY, PRODUCT_TELEMETRY, MARKETING_PROFILE, EMAIL_DELIVERY_LOG, LEGAL_HOLD_RECORD
 

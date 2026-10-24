@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from .dataset import parse_ts
+from .dataset import DatasetError, _rows, parse_ts, try_ts
 
 ACCOUNT_WINDOW = (timedelta(minutes=-90), timedelta(minutes=15))      # relative to reported_at
 ANALYTICS_WINDOW = (timedelta(minutes=-45), timedelta(minutes=-5))
@@ -50,9 +50,17 @@ class CaseKey:
 
 
 def load_events(root: Path) -> list[Event]:
-    with (root / "system_activity.csv").open(newline="", encoding="utf-8") as fh:
-        return [Event(r["activity_id"], parse_ts(r["event_time"]), r["event_type"], r["source_system"], r["target_system"],
-                      r["resource_id"], r["reported_result"]) for r in csv.DictReader(fh)]
+    """Activity rows; a row with an unparseable time or without a resource is skipped, a missing file means an empty stream."""
+    try:
+        rows = _rows(root / "system_activity.csv", ("activity_id", "event_time", "event_type"))
+    except DatasetError:
+        return []
+    out = []
+    for r in rows:
+        t = try_ts(r["event_time"])
+        if t is not None:
+            out.append(Event(r["activity_id"], t, r["event_type"], r.get("source_system", ""), r.get("target_system", ""), r.get("resource_id", ""), r.get("reported_result", "")))
+    return out
 
 
 @dataclass

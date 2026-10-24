@@ -33,7 +33,7 @@ class FakeClient:
 
 
 GOOD = {"screen": "connector console", "records": [
-    {"resource_id": "data_flow_1121", "selected": True, "emails": ["jain.aditi@gmail.com"], "user_ids": [], "phones": [],
+    {"resource_id": "data_flow_1121", "selected": True, "emails": ["aditi.example@example.test"], "user_ids": [], "phones": [],
      "status_words": ["Healthy", "Continuous"], "shows_direct_identifiers": True, "aliases": []},
     {"resource_id": "Order notifications", "selected": False, "emails": [], "user_ids": [], "phones": [], "status_words": [],
      "shows_direct_identifiers": False, "aliases": []}]}
@@ -158,7 +158,7 @@ class ImageObservationTests(unittest.TestCase):
         self.assertEqual(n, 1)                                          # "Order notifications" has no resource id -> ignored
         o = base.obs[0]
         self.assertEqual((o.resource, o.category, o.state, o.system), ("data_flow_1121", "DATA_FLOW", "ACTIVE", "integration_service"))
-        self.assertIn("jain.aditi@gmail.com", o.idents)
+        self.assertIn("aditi.example@example.test", o.idents)
 
     def test_status_words_decide_state_in_code(self):
         r = json.loads(json.dumps(GOOD)); r["records"][0]["status_words"] = ["Paused"]
@@ -178,12 +178,12 @@ class ImageObservationTests(unittest.TestCase):
         self.assertEqual(self.obs(r)[0].obs[0].idents, frozenset({"ok@example.com"}))
 
     def test_alias_from_catalog_names_the_resource(self):
-        cat = [{"resource_id": "export_1842", "alias": "NST-2026-0718-1842", "system": "export_service", "idents": frozenset({"ingrid.dahl@outlook.com"})}]
+        cat = [{"resource_id": "export_1842", "alias": "NST-2026-0718-1842", "system": "export_service", "idents": frozenset({"ingrid.example@example.test"})}]
         r = {"screen": "statement", "records": [{"resource_id": "", "selected": True, "emails": [], "user_ids": [], "phones": [],
                                                   "status_words": ["Ready"], "shows_direct_identifiers": True, "aliases": ["NST-2026-0718-1842"]}]}
         o = self.obs(r, cat)[0].obs[0]
         self.assertEqual((o.resource, o.category, o.state), ("export_1842", "USER_EXPORT", "PRESENT"))
-        self.assertIn("ingrid.dahl@outlook.com", o.idents)
+        self.assertIn("ingrid.example@example.test", o.idents)
 
     def test_unavailable_model_degrades_to_a_warning_not_a_crash(self):
         base = EvidenceBase()

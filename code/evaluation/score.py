@@ -9,11 +9,11 @@ Reports (all as Markdown so the same text goes to the terminal and to evaluation
   * sequence accuracy                    (exact ordered match of the whole row, and mean LCS ratio)
   * per-case failure listing with a readable diff
 
-Dev / held-out split: the 32 labeled samples are split deterministically (stratified by status and by
+Dev / not-tuned split: the 32 labeled samples are split deterministically (stratified by status and by
 the set of systems involved, tie-broken by a hash of case_id; no case_id literals). Failure diffs are
-only printed for dev cases; held-out cases only contribute to aggregate numbers unless --reveal-heldout.
+only printed for dev cases; not-tuned cases only contribute to aggregate numbers unless --reveal-heldout.
 
-Usage:  python3 code/evaluation/score.py --pred out/pred.csv [--split dev|heldout|all] [--markdown report.md]
+Usage:  python3 code/evaluation/score.py --pred out/pred.csv [--split dev|heldout|all   (heldout = the 9 cases not tuned against in Phase 2-3)] [--markdown report.md]
 """
 from __future__ import annotations
 
@@ -64,10 +64,10 @@ def read_rows(path: Path) -> dict[str, Row]:
 
 # ----------------------------------------------------------------------------- split
 def assign_splits(gold: dict[str, Row]) -> dict[str, str]:
-    """Deterministic ~2/3 dev, ~1/3 held-out. Stratum = (status, size bucket of the answer) so both halves
+    """Deterministic ~2/3 dev, ~1/3 not tuned against. Stratum = (status, size bucket of the answer) so both halves
     contain simple and complex cases of each status; inside a stratum cases are ordered by sha256(case_id)
-    and every third one goes to held-out. (An earlier draft stratified by the exact set of systems; that made
-    almost every stratum a singleton and left only 4 held-out cases - too few to say anything.)"""
+    and every third one goes to the not-tuned group. (An earlier draft stratified by the exact set of systems; that made
+    almost every stratum a singleton and left only 4 not-tuned cases - too few to say anything.)"""
     def bucket(n: int) -> str:
         return "small" if n <= 3 else "medium" if n <= 8 else "large"
 
@@ -294,20 +294,20 @@ def build_report(gold, pred, split_arg: str, failures: int, reveal_heldout: bool
     dev = sorted(c for c in gold if splits[c] == "dev")
     held = sorted(c for c in gold if splits[c] == "heldout")
     allc = sorted(gold)
-    out = [f"## Score: {label}", "", f"labeled cases {len(allc)} = dev {len(dev)} + held-out {len(held)} "
+    out = [f"## Score: {label}", "", f"labeled cases {len(allc)} = dev {len(dev)} + not-tuned-against-in-Phase-2-3 {len(held)} "
            "(split is deterministic and stratified; see assign_splits)", ""]
     ms: dict[str, Metrics] = {}
-    wanted = {"all": [("all", allc)], "dev": [("dev", dev)], "heldout": [("held-out", held)],
-              "both": [("dev", dev), ("held-out", held), ("all", allc)]}[split_arg]
+    wanted = {"all": [("all", allc)], "dev": [("dev", dev)], "heldout": [("not-tuned", held)],
+              "both": [("dev", dev), ("not-tuned", held), ("all", allc)]}[split_arg]
     for name, ids in wanted:
         m = score(gold, pred, ids)
         ms[name] = m
         out += summary_lines(m, f"{name} ({len(ids)} cases)")
-        if name == "dev" or (name == "held-out" and reveal_heldout) or (name == "all" and split_arg == "all"):
+        if name == "dev" or (name == "not-tuned" and reveal_heldout) or (name == "all" and split_arg == "all"):
             only = set(dev) if name == "all" and not reveal_heldout else None
             out += failure_lines(m, failures, only)
-        elif name == "held-out":
-            out += ["", "#### Per-case failures", "", "(hidden on purpose: held-out cases are only used for the aggregate generalisation number)"]
+        elif name == "not-tuned":
+            out += ["", "#### Per-case failures", "", "(hidden on purpose: the not-tuned cases are only used for the aggregate number)"]
         out.append("")
     return "\n".join(out), ms
 
@@ -318,7 +318,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--gold", type=Path, default=ROOT / "dataset" / "sample_output.csv")
     ap.add_argument("--split", choices=["dev", "heldout", "all", "both"], default="both")
     ap.add_argument("--failures", type=int, default=20, help="max failing cases to list")
-    ap.add_argument("--reveal-heldout", action="store_true", help="also list held-out failures (do not use while tuning)")
+    ap.add_argument("--reveal-heldout", action="store_true", help="also list failures of the not-tuned cases (do not use while tuning)")
     ap.add_argument("--markdown", type=Path, help="also write the report here")
     ap.add_argument("--label", default="")
     a = ap.parse_args(argv)

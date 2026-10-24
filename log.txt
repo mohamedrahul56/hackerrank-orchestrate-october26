@@ -286,3 +286,37 @@ branch=claude/exciting-lamport-yrcfpx
 repo_root=/home/user/hackerrank-orchestrate-october26
 worktree=main
 parent_agent=none
+
+## [2026-10-24T16:51:10Z] Phase 3 follow-ups and Phase 4 hardening
+
+User Prompt (verbatim, secrets redacted):
+Phase 3 accepted. Before Phase 4, make these changes and report on each:
+
+1. Fallback rows: the 9 PNG-only cases are deletion requests per the classifier, so a NOT_APPLICABLE placeholder is almost certainly wrong. Change the placeholder to the most likely status (INCOMPLETE) with the steps that the structured data supports, and make sure the validator accepts it. Report the status counts again and mark those rows clearly in a "provisional" list. Do not change NOT_APPLICABLE logic for the 10 real non-deletion cases.
+2. COMPLETE rows and evidence: count how many of the 206 later-evidence end-state steps, and any other steps, sit in COMPLETE rows with an empty evidence_id. The spec requires every step of a COMPLETE row to cite a file_id, activity_id or audit_id. Fix any violations (cite a valid id or drop the step) and make the validator fail on this.
+3. Timing heuristics: add a single config flag to disable the second-of-minute offset heuristic and the 40/41-second analytics heuristic, report the sample and hold-out scores with and without them, and write an honest README/NOTES paragraph that they exploit regularities in this dataset's event timing and would not be reliable on production logs. Do not add new heuristics.
+4. Held-out wording: in all reports call the 9 cases "not tuned against in Phase 2-3", not "unseen".
+
+Then do Phase 4 (hardening):
+- variance: re-run with a cleared model cache once the image path has real data; until a key exists, test the retry/cache logic with fakes.
+- robustness: malformed rows, empty fields, missing or corrupt evidence files, unreadable PNG, API timeout/rate limit/invalid JSON from the model, a model returning an injection string inside extracted fields. One bad case must never crash a run.
+- hardcoding scan and secrets scan must pass; confirm .env, prices.json with real keys (none), code/out and agent traces are excluded from the zip.
+- dry-run the zip build and list its contents, confirming no dataset/, no nested archives, no raw .csv/.json/.sql needed by the judge (key tables are in Markdown).
+- confirm the 23 synthetic cases and the other evaluation content are readable in Markdown.
+Stop at the Phase 4 checkpoint with: new status counts, provisional rows, test count, determinism result, and a list of anything still unmeasured.
+
+Agent Response Summary:
+Made the four requested changes: the 9 screenshot-only deletion requests are now provisional INCOMPLETE rows (3 steps each, validator-clean; main status 152/356/10), COMPLETE rows have 0 empty evidence ids (validator tested on the written CSV), one flag --no-timing-heuristics / use_timing_heuristics with sample and hold-out scores with and without plus an honest README/NOTES paragraph, and the 9 cases are called "not tuned against in Phase 2-3" everywhere. Phase 4: lenient loading for malformed rows/files/records, model-output sanitising, fake-based retry/cache/injection tests, a deterministic package tool with secrets and dataset-leak scans (dry run clean, extracted zip reproduces output.csv byte for byte). 157 tests pass; two full runs are byte-identical.
+
+Actions:
+* Changed code/auditor/{audit,dataset,discover,identity,validate}.py, evidence/{imageobs,load,loaders}.py, main.py, evaluation/main.py (was empty) and the report/scorer wording
+* Added code/tools/package.py, code/evaluation/phase4_report.py (+ phase4_results.md), tests test_robustness / test_package, README limitations section, NOTES section 12, CHANGELOG rows 23-30, .gitignore entries
+* Ran the package dry run, built and extracted the zip, ran main.py from the extracted copy; committed and pushed
+
+Context:
+tool=Claude Code
+model=claude-sonnet-5-5
+branch=claude/exciting-lamport-yrcfpx
+repo_root=/home/user/hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none

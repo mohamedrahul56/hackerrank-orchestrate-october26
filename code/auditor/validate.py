@@ -145,7 +145,7 @@ def _pairing_issues(case_id: str, steps: list[dict[str, Any]]) -> list[Issue]:
 def validate_rows(rows: list[tuple[str, str, Any]], ds: Dataset) -> list[Issue]:
     """Row-level checks across a whole prediction set (one row per request, request order, no dupes)."""
     issues: list[Issue] = []
-    expected = [r.case_id for r in ds.requests]
+    expected = list(ds.case_order) if ds.case_order else [r.case_id for r in ds.requests]
     got = [c for c, _, _ in rows]
     if len(set(got)) != len(got):
         issues.append(Issue("-", "DUPLICATE_CASE", f"duplicate case_ids: {[c for c, n in Counter(got).items() if n > 1][:5]}"))

@@ -73,14 +73,35 @@ def state_from_description(prefix: str, rec: dict) -> tuple[str, str] | None:
         return "ACCOUNT_TOMBSTONE", ("EXPOSED" if exposed else "REDACTED")
     if prefix == "marketing":
         return "MARKETING_PROFILE", "PRESENT"
+    if prefix == "cache":
+        return "CACHE_ENTRY", "PRESENT"
+    if prefix == "email_delivery":
+        return ("EMAIL_DELIVERY_LOG", "EXPOSED" if exposed else "REDACTED")
     return None
+
+
+MAX_RECORDS, MAX_ITEMS = 100, 20
+SHORT_WORD = re.compile(r"[A-Za-z][A-Za-z\- ]{0,23}")          # a status word is a short label; a sentence (an injected instruction) is dropped
+
+
+def sanitize(rec: dict) -> dict:
+    """Everything the model wrote that reaches a decision is first reduced to a closed shape: capped lists, short label-like status
+    words, syntactically valid e-mails / user ids (checked again at use). Free text such as `screen` is never read."""
+    words = [w.strip() for w in rec.get("status_words", [])[:MAX_ITEMS] if isinstance(w, str)]
+    return {**rec, "status_words": [w for w in words if SHORT_WORD.fullmatch(w) and len(w.split()) <= 3],
+            "emails": [e for e in rec.get("emails", [])[:MAX_ITEMS] if isinstance(e, str)],
+            "user_ids": [u for u in rec.get("user_ids", [])[:MAX_ITEMS] if isinstance(u, str)],
+            "phones": [p for p in rec.get("phones", [])[:MAX_ITEMS] if isinstance(p, str)],
+            "aliases": [a for a in rec.get("aliases", [])[:MAX_ITEMS] if isinstance(a, str)],
+            "resource_id": rec.get("resource_id", "") if isinstance(rec.get("resource_id", ""), str) else ""}
 
 
 def observations_from_reading(base: EvidenceBase, file_id: str, file_t: datetime, reading: dict, catalog: list[dict]) -> int:
     """Validate a model reading and append Obs. Returns how many records were accepted."""
     alias_to_resource = {row["alias"].lower(): row for row in catalog if row["alias"]}
     n = 0
-    for rec in reading["records"]:
+    for raw in reading["records"][:MAX_RECORDS]:
+        rec = sanitize(raw)
         rid = rec["resource_id"].strip()
         row = None
         if not RESOURCE_RE.fullmatch(rid):

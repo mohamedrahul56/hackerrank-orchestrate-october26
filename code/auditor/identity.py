@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from .dataset import parse_ts
+from .dataset import _rows, parse_ts, try_ts
 from .evidence.records import norm_phone
 
 
@@ -54,18 +54,28 @@ class IdentityResolver:
         self._load(dataset_root)
 
     def _load(self, root: Path) -> None:
-        with (root / "user_identities.csv").open(newline="", encoding="utf-8") as fh:
-            for r in csv.DictReader(fh):
-                p = Person(r["user_id"], r["name"], norm_email(r["email"]))
-                p.updated_at = parse_ts(r["updated_at"]) if r.get("updated_at") else None
-                p.hashes |= {r["email_hash"].lower(), email_hash(r["email"])}
-                if norm_phone(r["phone"]):
-                    p.phones.add(norm_phone(r["phone"]))
-                self.people[p.user_id] = p
+        self.warnings: list[str] = []
+        for r in _rows(root / "user_identities.csv", ("user_id", "email")):
+            if not r["user_id"].strip() or not r["email"].strip():
+                self.warnings.append(f"identity row skipped (empty user_id or email): {r.get('user_id', '')!r}")
+                continue
+            p = Person(r["user_id"].strip(), r.get("name", ""), norm_email(r["email"]))
+            p.updated_at = try_ts(r.get("updated_at"))
+            p.hashes |= {email_hash(r["email"])} | ({r["email_hash"].strip().lower()} if r.get("email_hash", "").strip() else set())
+            if norm_phone(r.get("phone", "")):
+                p.phones.add(norm_phone(r["phone"]))
+            self.people[p.user_id] = p
         changes: dict[str, list[dict]] = defaultdict(list)
-        with (root / "user_audit_log.csv").open(newline="", encoding="utf-8") as fh:
-            for r in csv.DictReader(fh):
-                changes[r["user_id"]].append(r)
+        try:
+            log_rows = _rows(root / "user_audit_log.csv", ("user_id", "event_time", "field_name"))
+        except Exception as e:  # noqa: BLE001 - history is optional: without it only current identifiers resolve
+            self.warnings.append(f"user_audit_log.csv not usable ({e}); only current identifiers will resolve")
+            log_rows = []
+        for r in log_rows:
+            if try_ts(r["event_time"]) is None:
+                self.warnings.append(f"audit-log row {r.get('audit_id', '?')} skipped (bad event_time)")
+                continue
+            changes[r["user_id"]].append(r)
         for uid, rows in changes.items():
             p = self.people.get(uid)
             if p is None:
@@ -81,7 +91,7 @@ class IdentityResolver:
             spans: list[tuple[str, datetime | None, datetime | None]] = []
             for r in email_rows:                                    # old email valid until the change time
                 when = parse_ts(r["event_time"])
-                spans.append((norm_email(r["old_value"]), prev_until, when))
+                spans.append((norm_email(r.get("old_value", "")), prev_until, when))
                 p.hashes.add(email_hash(r["old_value"])); p.hashes.add(email_hash(r["new_value"]))
                 prev_until = when
             spans.append((p.current_email, prev_until, None))

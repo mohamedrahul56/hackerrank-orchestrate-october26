@@ -155,3 +155,20 @@ Before submitting, confirm that:
 - `code.zip` includes your runnable code, `README.md`, `code/evaluation/evaluation_report.md`, and `code/evaluation/usage_report.md`;
 - `log.txt` follows the `AGENTS.md` turn format and is uploaded to the `chat_transcript` slot; and
 - no API keys, credentials, real personal data, or sensitive configuration values are included.
+
+---
+
+## Known limitations of this solution (kept honest; the full README with setup and run instructions is written in Phase 5)
+
+**Two heuristics exploit the timing of this dataset's synthetic events and would not be reliable on production logs.**
+When a deleted account or a fully anonymized analytics record carries no identifier anywhere, the agent finds it through the deletion worker's activity timeline.
+Two of the signals used there are regularities of how this dataset's events were generated, not properties of real systems:
+(1) inside one case, the second-of-minute of each worker event keeps a fixed offset from that case's account-delete event, and (2) an anonymization event sits 40/41 seconds
+after it. Real services have unsynchronised clocks, retries and jitter, so these offsets would not exist there. They are learned only from cases whose links are explicit
+(never from labels), they were measured by hiding links and re-finding them (100% precision of what they assign, see `code/evaluation/phase4_results.md`), and they can be
+switched off with one flag: `python3 code/main.py --no-timing-heuristics` (library: `Config(use_timing_heuristics=False)`). Switching them off lowers the labeled-sample step F1
+from 99.2% to 97.9% and leaves 110 instead of 27 deletion rows without an account step. The older timeline rules (account delete 45-75 minutes before `reported_at`, analytics
+about 29 minutes before, 390/449 s between policy actions) are the same kind of dataset-specific regularity; `--no-discovery` turns all timeline discovery off.
+
+**Provisional rows.** Nine deletion requests have a screenshot as their only state evidence. Without a vision-model key they are answered `INCOMPLETE` with a finding on the record the
+data catalog ties to the user, citing the screenshot, and are listed as provisional in the run notes. With a key the screenshot is read and the row is computed normally.

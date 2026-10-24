@@ -20,18 +20,28 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from auditor.audit import Auditor, Config  # noqa: E402
-from auditor.dataset import load_dataset  # noqa: E402
+from auditor.dataset import DatasetError, load_dataset  # noqa: E402
 from auditor.outio import write_output  # noqa: E402
 from auditor.validate import validate_output_file  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
+    try:
+        return _run(argv)
+    except DatasetError as e:                       # a required input file is missing or has no usable header: nothing sensible can be written
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+
+
+def _run(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dataset", type=Path, default=ROOT / "dataset")
     ap.add_argument("--requests", default="deletion_requests.csv", help="file inside --dataset with the cases to answer")
     ap.add_argument("--out", type=Path, default=ROOT / "output.csv")
     ap.add_argument("--no-later-linking", action="store_true", help="forbid linking resources to users with evidence captured after audit_at")
     ap.add_argument("--no-discovery", action="store_true", help="disable activity-timeline discovery of id-less accounts / analytics")
+    ap.add_argument("--no-timing-heuristics", action="store_true",
+                    help="disable the two second-of-minute heuristics (account offsets, analytics 40/41 s offset); they exploit this dataset's event timing")
     ap.add_argument("--cohort-filter", action="store_true", help="ablation only: narrow ambiguous accounts by cohort snapshot (measured harmful, off by default)")
     ap.add_argument("--images", choices=["auto", "on", "off"], default="auto",
                     help="read the PNG evidence with a vision model (needs ANTHROPIC_API_KEY); auto = only when a key is set")
@@ -39,7 +49,8 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO if a.verbose else logging.WARNING, format="%(levelname)s %(message)s")
 
-    cfg = Config(allow_later_linking=not a.no_later_linking, use_discovery=not a.no_discovery, use_cohort_filter=a.cohort_filter)
+    cfg = Config(allow_later_linking=not a.no_later_linking, use_discovery=not a.no_discovery, use_cohort_filter=a.cohort_filter,
+                 use_timing_heuristics=not a.no_timing_heuristics)
     llm = None
     if a.images == "on" or (a.images == "auto" and (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))):
         from auditor.llm import LLM
@@ -50,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
         cfg.image_extractor = lambda path, system, instruction, schema, version: llm.read_image_json("image", path, system, instruction, schema, version)
     auditor = Auditor(a.dataset, cfg)
     ds = load_dataset(a.dataset, a.requests)
-    results = [auditor.audit(r.case_id) for r in ds.requests]
+    results = [auditor.audit(cid) for cid in ds.case_order]
     write_output(a.out, [(x.case_id, x.status, x.steps) for x in results])
     issues = validate_output_file(a.out, ds)
     errors = [i for i in issues if i.severity == "error"]
@@ -58,6 +69,11 @@ def main(argv: list[str] | None = None) -> int:
     notes = [f"# Run notes for {a.out.name}", "", f"cases: {len(results)}, status counts: {dict(Counter(x.status for x in results))}",
              f"evidence warnings: {len(auditor.base.warnings)}", ""]
     notes += [f"* {w}" for w in auditor.base.warnings[:50]]
+    notes += [f"* {w}" for w in auditor.res.warnings[:20]]
+    notes += [f"* request file line {b.line} ({b.case_id or 'no case_id'}): {b.reason}" for b in ds.bad_rows]
+    provisional = [x for x in results if x.provisional]
+    notes += ["", f"## Provisional rows ({len(provisional)}): built from structured data because the only state evidence is a screenshot that was not read", ""]
+    notes += [f"* {x.case_id}: {x.status}, {len(x.steps)} steps - " + "; ".join(n for n in x.notes if n.startswith("PROVISIONAL")) for x in provisional]
     notes += ["", "## Per-case notes (assumptions, fallbacks)", ""]
     notes += [f"* {x.case_id}: {n}" for x in results for n in x.notes]
     notes += ["", "## Later-evidence links (D3: evidence captured after audit_at used ONLY to link a resource to the user)", ""]
@@ -66,7 +82,7 @@ def main(argv: list[str] | None = None) -> int:
 
     fallbacks = sum(1 for x in results for n in x.notes if n.startswith("FALLBACK"))
     print(f"wrote {a.out} ({len(results)} rows); status counts {dict(Counter(x.status for x in results))}; "
-          f"fallbacks {fallbacks}; validator errors {len(errors)}", file=sys.stderr)
+          f"fallbacks {fallbacks}; provisional {len(provisional)} {[x.case_id for x in provisional]}; validator errors {len(errors)}", file=sys.stderr)
     for i in errors[:10]:
         print(i, file=sys.stderr)
     return 1 if errors else 0

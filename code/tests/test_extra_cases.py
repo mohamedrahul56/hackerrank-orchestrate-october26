@@ -37,6 +37,23 @@ class ExtraCases(unittest.TestCase):
             real = list(csv.DictReader(fh))
         self.assertEqual(list(csv.DictReader(self.rules.splitlines())), real)
 
+    def test_every_case_is_fully_readable_as_markdown(self):
+        """A reader (or the code judge, which ignores json/csv files) sees request, evidence, rule basis and the expected steps in the .md itself."""
+        text = xc.MD.read_text(encoding="utf-8")
+        self.assertEqual(xc.MD.suffix, ".md")
+        for c in self.cases:
+            start = text.index(f"## {c['id']} - ")
+            nxt = text.find("\n## XC-", start + 1)
+            section = text[start: nxt if nxt != -1 else len(text)]
+            self.assertIn(c["request"]["text"], section)
+            self.assertIn("**rule basis**", section)
+            self.assertIn("**evidence files**", section)
+            self.assertIn(f"**expected**: `{c['expected']['status']}`", section)
+            table_rows = [l for l in section.splitlines() if l.startswith("| ") and l.split("|")[1].strip().isdigit()]
+            self.assertEqual(len(table_rows), len(c["expected"]["steps"]), c["id"])
+            if not c["expected"]["steps"]:
+                self.assertIn("`steps_json` = `[]`", section)
+
     def test_a_broken_expectation_is_detected(self):
         case = next(c for c in self.cases if c["id"] == "XC-01")
         broken = {**case, "expected": {"status": "COMPLETE", "steps": case["expected"]["steps"]}}

@@ -1,7 +1,7 @@
 # Submission checklist (prepared in Phase 1; verified item by item in Phase 5)
 
 ## Files to upload
-- [ ] `code.zip` - built from the repo root with the one command documented in `README.md` (Phase 5). Must contain `README.md`, `code/` (incl. `code/evaluation/evaluation_report.md` and `code/evaluation/usage_report.md`).
+- [ ] `code.zip` - built from the repo root with `python3 code/tools/package.py --require-final` (checks every rule below first; `--dry-run` lists without writing). Must contain `README.md`, `code/` (incl. `code/evaluation/evaluation_report.md` and `code/evaluation/usage_report.md`).
 - [ ] `output.csv` - root-level, 518 data rows + header, row order = `dataset/deletion_requests.csv`, passes `auditor.validate.validate_output_file`.
 - [ ] `chat_transcript` = root `log.txt` (append-only; every entry has non-empty `tool=` and `model=`).
 - [ ] `agent-trace.zip` (you export it yourself; steps below).

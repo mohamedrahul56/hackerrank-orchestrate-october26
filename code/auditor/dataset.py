@@ -34,6 +34,8 @@ class Dataset:
     evidence_time: dict[str, datetime] = field(default_factory=dict)   # file_id -> captured_at
     activity_time: dict[str, datetime] = field(default_factory=dict)   # activity_id -> event_time
     audit_time: dict[str, datetime] = field(default_factory=dict)      # audit_id -> event_time
+    case_order: list[str] = field(default_factory=list)                # every answerable case_id in file order (malformed rows included)
+    bad_rows: list = field(default_factory=list)                       # BadRow list from the lenient loader
 
     def citable_time(self, evidence_id: str) -> datetime | None:
         """Timestamp of a citable id (file_id / activity_id / audit_id) or None if unknown."""
@@ -43,30 +45,95 @@ class Dataset:
         return None
 
 
-def _rows(path: Path) -> list[dict[str, str]]:
-    with path.open(newline="", encoding="utf-8") as fh:
-        return list(csv.DictReader(fh))
+class DatasetError(RuntimeError):
+    """A file the run cannot do without is missing or has no usable header. Everything else degrades row by row."""
+
+
+def _rows(path: Path, required: tuple[str, ...] = ()) -> list[dict[str, str]]:
+    """Rows of a CSV as dicts. Blank lines are skipped; short rows get empty strings; a missing column in the header is an error."""
+    try:
+        with path.open(newline="", encoding="utf-8-sig") as fh:
+            reader = csv.DictReader(fh)
+            missing = [c for c in required if c not in (reader.fieldnames or [])]
+            if missing:
+                raise DatasetError(f"{path.name}: missing column(s) {missing}")
+            return [{k: (v if v is not None else "") for k, v in r.items() if k is not None}
+                    for r in reader if any((v or "").strip() for v in r.values() if not isinstance(v, list))]
+    except FileNotFoundError as e:
+        raise DatasetError(f"required file not found: {path}") from e
+    except UnicodeDecodeError as e:
+        raise DatasetError(f"{path.name} is not valid UTF-8: {e}") from e
+
+
+def try_ts(value: str | None) -> datetime | None:
+    try:
+        return parse_ts(value) if value and value.strip() else None
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+@dataclass(frozen=True)
+class BadRow:
+    case_id: str
+    line: int
+    reason: str
+
+
+REQUEST_COLUMNS = ("case_id", "email", "requested_at", "reported_status", "reported_at", "audit_at", "request_text")
+
+
+def load_requests_lenient(path: Path) -> tuple[list[Request], list[BadRow], list[str]]:
+    """(good requests, malformed rows, case_ids in file order without duplicates).
+
+    A row with an unparseable timestamp or an empty email cannot be audited but still needs its answer row, so it is reported as a
+    BadRow and the caller writes a conservative row for it. A row without case_id cannot be answered at all (skipped, reported).
+    A repeated case_id keeps the first row."""
+    good: list[Request] = []
+    bad: list[BadRow] = []
+    order: list[str] = []
+    seen: set[str] = set()
+    for i, r in enumerate(_rows(path, REQUEST_COLUMNS), start=2):
+        cid = (r.get("case_id") or "").strip()
+        if not cid:
+            bad.append(BadRow("", i, "empty case_id"))
+            continue
+        if cid in seen:
+            bad.append(BadRow(cid, i, "duplicate case_id (first row kept)"))
+            continue
+        seen.add(cid)
+        order.append(cid)
+        ts = {k: try_ts(r.get(k)) for k in ("requested_at", "reported_at", "audit_at")}
+        broken = [k for k, v in ts.items() if v is None]
+        if broken:
+            bad.append(BadRow(cid, i, f"unparseable {', '.join(broken)}"))
+        elif not (r.get("email") or "").strip():
+            bad.append(BadRow(cid, i, "empty email"))
+        else:
+            good.append(Request(cid, r["email"], ts["requested_at"], r.get("reported_status", ""), ts["reported_at"], ts["audit_at"], r.get("request_text", "")))
+    return good, bad, order
 
 
 def load_requests(path: Path) -> list[Request]:
-    return [
-        Request(
-            case_id=r["case_id"],
-            email=r["email"],
-            requested_at=parse_ts(r["requested_at"]),
-            reported_status=r["reported_status"],
-            reported_at=parse_ts(r["reported_at"]),
-            audit_at=parse_ts(r["audit_at"]),
-            request_text=r["request_text"],
-        )
-        for r in _rows(path)
-    ]
+    """Strict variant for tools that expect a clean file: raises on the first malformed row."""
+    good, bad, _ = load_requests_lenient(path)
+    broken = [b for b in bad if not b.reason.startswith("duplicate")]
+    if broken:
+        raise DatasetError(f"{path.name}: malformed row(s): " + "; ".join(f"line {b.line} {b.case_id or '?'}: {b.reason}" for b in broken[:5]))
+    return good
 
 
 def load_dataset(root: Path, requests_file: str = "deletion_requests.csv") -> Dataset:
     ds = Dataset(root=root)
-    ds.requests = load_requests(root / requests_file)
-    ds.evidence_time = {r["file_id"]: parse_ts(r["captured_at"]) for r in _rows(root / "evidence_files.csv")}
-    ds.activity_time = {r["activity_id"]: parse_ts(r["event_time"]) for r in _rows(root / "system_activity.csv")}
-    ds.audit_time = {r["audit_id"]: parse_ts(r["event_time"]) for r in _rows(root / "user_audit_log.csv")}
+    ds.requests, bad, ds.case_order = load_requests_lenient(root / requests_file)
+    ds.bad_rows = bad
+    for table, fname, id_col, time_col in ((ds.evidence_time, "evidence_files.csv", "file_id", "captured_at"),
+                                           (ds.activity_time, "system_activity.csv", "activity_id", "event_time"),
+                                           (ds.audit_time, "user_audit_log.csv", "audit_id", "event_time")):
+        try:
+            for r in _rows(root / fname):
+                t = try_ts(r.get(time_col))
+                if r.get(id_col) and t is not None:
+                    table[r[id_col]] = t
+        except DatasetError:
+            pass                                                   # a missing optional table just means nothing can be cited from it
     return ds

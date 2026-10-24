@@ -6,9 +6,10 @@ from tests._common import *  # noqa: F401,F403
 
 
 class HygieneTests(unittest.TestCase):
+    @unittest.skipUnless((ROOT / ".gitignore").exists(), ".gitignore is not part of code.zip")
     def test_gitignore_blocks_env_and_zip(self):
         lines = (ROOT / ".gitignore").read_text().split()
-        for needed in (".env", "code.zip", "__pycache__/"):
+        for needed in (".env", "code.zip", "__pycache__/", "code/out/", "code/config/prices.json", "agent-trace/"):
             self.assertIn(needed, lines)
 
     def test_no_env_file_is_tracked(self):

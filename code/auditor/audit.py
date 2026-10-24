@@ -21,9 +21,10 @@ from pathlib import Path
 
 from . import discover as dsc
 from .classify import DELETION, classify_request
-from .dataset import Request, load_requests, parse_ts
-from .evidence.load import catalog_rows, load_evidence
-from .evidence.records import EvidenceBase, Obs
+from .dataset import Request, load_requests_lenient, parse_ts
+from .evidence.imageobs import state_from_description
+from .evidence.load import catalog_rows, load_evidence, manifest_rows
+from .evidence.records import EvidenceBase, Obs, system_for
 from .identity import IdentityResolver
 from .link import Linker
 from .policy import PolicyEngine
@@ -46,14 +47,16 @@ class CaseResult:
     steps: list[dict]
     notes: list[str] = field(default_factory=list)          # assumptions / fallbacks used (surfaced in the run log)
     later_links: list[tuple[str, str, str]] = field(default_factory=list)  # (resource, linking file/activity, its time)
+    provisional: bool = False       # row built without reading a screenshot that the case depends on (see Auditor._provisional)
 
 
 @dataclass
 class Config:
     allow_later_linking: bool = True      # D3: later evidence may link a resource to a user (never state, never cited)
     use_discovery: bool = True            # activity-timeline discovery of id-less accounts / anonymized analytics
+    provisional_rows: bool = True         # deletion request whose only state evidence is an unread screenshot -> provisional INCOMPLETE row instead of NOT_APPLICABLE
     use_cohort_filter: bool = False       # measured harmful by hold-out (precision 86% vs 100%): kept only as an ablation switch
-    use_phase: bool = True                # seconds-phase stage of the account discovery (PhaseModel)
+    use_timing_heuristics: bool = True   # the two second-of-minute heuristics (accounts: PhaseModel offsets; analytics: the 40/41 s offset). Dataset-specific, see README/NOTES 12
     classifier_llm: object | None = None
     image_extractor: object | None = None
 
@@ -64,6 +67,7 @@ class Auditor:
         self.res = IdentityResolver(root)
         self.base: EvidenceBase = load_evidence(root, include_images=self.cfg.image_extractor is not None, image_extractor=self.cfg.image_extractor)
         self.catalog = catalog_rows(root)
+        self.manifest = manifest_rows(root)
         self.link = Linker(self.base, self.res, self.catalog)
         self.policy = PolicyEngine(root / "deletion_rules.csv")
         self.events = dsc.load_events(root)
@@ -71,10 +75,15 @@ class Auditor:
         for e in self.events:
             self.events_by_resource.setdefault(e.resource, []).append(e)
         self.requests: dict[str, Request] = {}
+        self.bad_requests: dict[str, str] = {}               # case_id -> why the row cannot be audited (answered with a fallback row)
         for f in requests_files:
             if (root / f).exists():
-                for r in load_requests(root / f):
+                good, bad, _ = load_requests_lenient(root / f)
+                for r in good:
                     self.requests.setdefault(r.case_id, r)
+                for b in bad:
+                    if b.case_id and not b.reason.startswith("duplicate"):
+                        self.bad_requests.setdefault(b.case_id, b.reason)
         self.classification = {cid: classify_request(r.request_text, self.cfg.classifier_llm) for cid, r in self.requests.items()}
         self.users: dict[str, set[str]] = {cid: {p.user_id for p in self.res.resolve(r.email, r.requested_at)} for cid, r in self.requests.items()}
         self.account_asg: dict[str, dsc.Assignment] = {}
@@ -119,7 +128,7 @@ class Auditor:
         for (rid, uid) in self.link.links:
             if rid.startswith("account_"):
                 owners.setdefault(rid, set()).add(uid)
-        own = {c.case_id: self._own_events(c) for c in cases} if self.cfg.use_phase else None
+        own = {c.case_id: self._own_events(c) for c in cases} if self.cfg.use_timing_heuristics else None
         self.disc_inputs = (cases, explicit, owners, cohort, own)         # kept for the hold-out measurement (evaluation/holdout.py)
         self.account_asg = dsc.assign_accounts(cases, self.events, explicit, owners, cohort if self.cfg.use_cohort_filter else None, own)
         anonymized = {o.resource for o in self.base.obs if o.category == "ANALYTICS_PROFILE" and o.state == "ANONYMIZED" and not o.idents}
@@ -130,7 +139,7 @@ class Auditor:
                 if e.source == "deletion_worker" and e.result == "SUCCESS" and e.event_type in CHAIN_POSITION and owners:
                     self.chain_events.append((e.t, CHAIN_POSITION[e.event_type], owners))
         has_own = {c.case_id for c in cases if any(x.startswith("analytics_") for x in self.link.resources_of(set(c.users)))}
-        account_time = {cid: a.event.t for cid, a in self.account_asg.items() if a.resource and a.event is not None} if self.cfg.use_phase else None
+        account_time = {cid: a.event.t for cid, a in self.account_asg.items() if a.resource and a.event is not None} if self.cfg.use_timing_heuristics else None
         self.analytics_inputs = ([c for c in cases if c.case_id not in has_own], self.events, anonymized, chain, self._foreign_chain, account_time)
         self.analytics_asg = dsc.assign_anonymized_analytics(*self.analytics_inputs)
 
@@ -153,6 +162,10 @@ class Auditor:
 
     # ------------------------------------------------------------------ one case
     def audit(self, case_id: str) -> CaseResult:
+        if case_id in self.bad_requests and case_id not in self.requests:
+            return CaseResult(case_id, "NOT_APPLICABLE", [], [f"FALLBACK: malformed request row ({self.bad_requests[case_id]})"])
+        if case_id not in self.requests:
+            return CaseResult(case_id, "NOT_APPLICABLE", [], ["FALLBACK: case_id not found in the requests files"])
         try:
             return self._audit(case_id)
         except Exception as e:  # noqa: BLE001 - one bad case must never crash the full run
@@ -262,13 +275,54 @@ class Auditor:
                 cite, how = self._cite_unobserved("account_service", r, states, ev)
                 notes.append(f"{rid}: no observation in window; cited {cite!r} ({how})")
             steps.append(make_step("VERIFICATION", "VERIFY_RECORD_ABSENT", "account_service", rid, cite))
+        provisional = False
         if not steps:
-            return CaseResult(case_id, "NOT_APPLICABLE", [], ["FALLBACK: deletion request but no evidence-backed resource in the request window"], later)
+            prov = self._provisional(r, users) if self.cfg.provisional_rows else None
+            if not prov:
+                return CaseResult(case_id, "NOT_APPLICABLE", [], ["FALLBACK: deletion request but no evidence-backed resource in the request window"], later)
+            steps, status, provisional = prov[0], "INCOMPLETE", True
+            notes.append("PROVISIONAL: " + prov[1])
         steps = canonicalize(steps)
         issues = [i for i in validate_case(case_id, status, steps) if i.severity == "error"]
         if issues:
             return CaseResult(case_id, "NOT_APPLICABLE", [], [f"FALLBACK: validator rejected row: {issues[0]}"], later)
-        return CaseResult(case_id, status, steps, notes, later)
+        return CaseResult(case_id, status, steps, notes, later, provisional)
+
+    # ------------------------------------------------------------------ provisional row for an unread screenshot
+    def _provisional(self, r: Request, users: set[str]) -> tuple[list[dict], str] | None:
+        """A deletion request whose state evidence is a screenshot nobody could read (no model key, or the read failed) is not a
+        non-deletion request, so NOT_APPLICABLE is almost certainly wrong. Build the most likely row from structured data only:
+          * a record the data catalog (or any identifier match) ties to the user inside [requested_at, audit_at], with no readable
+            state in the window;
+          * a screenshot captured inside the window by an admin tool of the same system (matched on the system's leading word:
+            account_admin_portal ~ account_service);
+          * the record is assumed to show the violating state of its category, i.e. the screenshot was taken because something remained.
+        The row is flagged provisional (run notes, provisional list) and is replaced as soon as the screenshot is really read."""
+        steps: list[dict] = []
+        used: list[str] = []
+        for rid in sorted(self.link.resources_of(users)):
+            times = [t for u in users for (t, _) in self.link.links.get((rid, u), [])]
+            if not any(r.requested_at <= t <= r.audit_at for t in times):
+                continue
+            if resolve(self.link.by_resource.get(rid, []), r.requested_at, r.audit_at) is not None:
+                continue
+            prefix = rid.rsplit("_", 1)[0]
+            judged = state_from_description(prefix, {"status_words": [], "emails": ["x@example.test"], "phones": [], "shows_direct_identifiers": True})
+            v = self.policy.judge(*judged) if judged else None
+            if v is None or not v.violation:
+                continue
+            system = self.link.catalog_systems.get(rid) or system_for(rid)
+            shots = [m for m in self.manifest if m["file_path"].lower().endswith(".png") and r.requested_at <= m["t"] <= r.audit_at
+                     and m["origin"].split("_")[0] == system.split("_")[0]]
+            if not shots:
+                continue
+            shot = max(shots, key=lambda m: (m["t"], m["file_id"]))
+            steps += [make_step("FINDING", v.treatment.finding, system, rid, shot["file_id"]), make_step("REMEDIATION", v.treatment.fix, system, rid),
+                      make_step("VERIFICATION", v.treatment.verify, system, rid)]
+            used.append(f"{rid} (screenshot {shot['file_id']})")
+        if not steps:
+            return None
+        return canonicalize(steps), ("no readable state evidence; assumed the violating state of " + ", ".join(used) + " from the unread screenshot(s)")
 
     # ------------------------------------------------------------------ citation fallback for unobserved resources
     def _cite_unobserved(self, system: str, r: Request, states: dict[str, ResourceState], ev: "dsc.Event | None") -> tuple[str, str]:
