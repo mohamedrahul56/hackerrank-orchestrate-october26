@@ -21,7 +21,8 @@ class OutIoTests(unittest.TestCase):
             write_output(p, [("c1", "INCOMPLETE", steps), ("c2", "NOT_APPLICABLE", [])])
             raw = p.read_bytes()
             self.assertNotIn(b"\r", raw)                           # LF only, like the samples
-            rows = list(csv.reader(p.open(newline="", encoding="utf-8")))
+            with p.open(newline="", encoding="utf-8") as fh:
+                rows = list(csv.reader(fh))
         self.assertEqual(rows[0], ["case_id", "deletion_status", "steps_json"])
         self.assertEqual(json.loads(rows[1][2]), steps)
         self.assertEqual(rows[2], ["c2", "NOT_APPLICABLE", "[]"])

@@ -1,0 +1,253 @@
+"""The case auditor: request -> (deletion_status, steps).
+
+Flow for one case (every decision here is code; the only model call is the optional image reader and the optional
+tie-breaker for ambiguous request wording):
+
+  1 classify request_text                      (classify.py)    NOT_APPLICABLE -> []
+  2 resolve current + historical identity      (identity.py)
+  3 find every resource tied to that identity  (link.py + discover.py)
+  4 state of each resource at audit_at         (state.py)       only evidence captured in [requested_at, audit_at]
+  5 policy verdict per resource                (policy.py)      driven by deletion_rules.csv
+  6 findings / remediation / verification      (this file)      canonical order via schema.canonicalize
+  7 validate                                   (validate.py)    a bad row never crashes the run
+"""
+from __future__ import annotations
+
+import csv
+import logging
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from pathlib import Path
+
+from . import discover as dsc
+from .classify import DELETION, classify_request
+from .dataset import Request, load_requests, parse_ts
+from .evidence.load import catalog_rows, load_evidence
+from .evidence.records import EvidenceBase, Obs
+from .identity import IdentityResolver
+from .link import Linker
+from .policy import PolicyEngine
+from .schema import canonicalize, make_step
+from .state import ResourceState, resolve, usable
+from .validate import validate_case
+
+log = logging.getLogger("auditor")
+
+CHAIN_POSITION = {"REDACT_RECORD": 1, "DISABLE_DATA_FLOW": 2, "BLOCK_RESTORE": 3}
+# A resource first seen up to this long AFTER audit_at may still be linked to the case (a later snapshot of the same
+# cohort: 2 days in every sample where it happens). Evidence from other scenarios of the same person is months away.
+LATER_LINK_MAX_DAYS = 7
+
+
+@dataclass
+class CaseResult:
+    case_id: str
+    status: str
+    steps: list[dict]
+    notes: list[str] = field(default_factory=list)          # assumptions / fallbacks used (surfaced in the run log)
+    later_links: list[tuple[str, str, str]] = field(default_factory=list)  # (resource, linking file/activity, its time)
+
+
+@dataclass
+class Config:
+    allow_later_linking: bool = True      # D3: later evidence may link a resource to a user (never state, never cited)
+    use_discovery: bool = True            # activity-timeline discovery of id-less accounts / anonymized analytics
+    use_cohort_filter: bool = True
+    classifier_llm: object | None = None
+    image_extractor: object | None = None
+
+
+class Auditor:
+    def __init__(self, root: Path, config: Config | None = None, requests_files: tuple[str, ...] = ("deletion_requests.csv", "sample_deletion_requests.csv")):
+        self.root, self.cfg = root, config or Config()
+        self.res = IdentityResolver(root)
+        self.base: EvidenceBase = load_evidence(root, include_images=self.cfg.image_extractor is not None, image_extractor=self.cfg.image_extractor)
+        self.catalog = catalog_rows(root)
+        self.link = Linker(self.base, self.res, self.catalog)
+        self.policy = PolicyEngine(root / "deletion_rules.csv")
+        self.events = dsc.load_events(root)
+        self.events_by_resource: dict[str, list[dsc.Event]] = {}
+        for e in self.events:
+            self.events_by_resource.setdefault(e.resource, []).append(e)
+        self.requests: dict[str, Request] = {}
+        for f in requests_files:
+            if (root / f).exists():
+                for r in load_requests(root / f):
+                    self.requests.setdefault(r.case_id, r)
+        self.classification = {cid: classify_request(r.request_text, self.cfg.classifier_llm) for cid, r in self.requests.items()}
+        self.users: dict[str, set[str]] = {cid: {p.user_id for p in self.res.resolve(r.email, r.requested_at)} for cid, r in self.requests.items()}
+        self.account_asg: dict[str, dsc.Assignment] = {}
+        self.analytics_asg: dict[str, dsc.Assignment] = {}
+        if self.cfg.use_discovery:
+            self._discover()
+
+    # ------------------------------------------------------------------ global discovery (needs every case)
+    def _case_files(self, cid: str) -> set[str]:
+        r = self.requests[cid]
+        files = set()
+        for res in self.link.resources_of(self.users[cid]):
+            for o in self.link.by_resource.get(res, []):
+                if usable(o, r.requested_at, r.audit_at):
+                    files.add(o.file_id)
+        return files
+
+    def _discover(self) -> None:
+        cases, explicit, cohort, chain = [], {}, {}, {}
+        for cid, r in self.requests.items():
+            if self.classification[cid].label != DELETION or not self.users[cid]:
+                continue
+            cases.append(dsc.CaseKey(cid, frozenset(self.users[cid]), r.reported_at, r.requested_at, r.audit_at, r.reported_status))
+            linked = self.link.resources_of(self.users[cid])
+            explicit[cid] = {x for x in linked if x.startswith("account_")
+                             and any(usable(o, r.requested_at, r.audit_at) for o in self.link.by_resource.get(x, []))}
+            files = self._case_files(cid)
+            cohort[cid] = {o.resource for o in self.base.obs if o.category == "USER_PROFILE" and o.file_id in files}
+            ch = []
+            for x in linked:
+                for e in self.events_by_resource.get(x, []):
+                    if e.source == "deletion_worker" and e.result == "SUCCESS" and e.event_type in CHAIN_POSITION \
+                            and abs((e.t - r.reported_at).total_seconds()) < 3600:
+                        ch.append((e.t, CHAIN_POSITION[e.event_type]))
+            chain[cid] = ch
+        owners: dict[str, set[str]] = {}
+        for (rid, uid) in self.link.links:
+            if rid.startswith("account_"):
+                owners.setdefault(rid, set()).add(uid)
+        self.account_asg = dsc.assign_accounts(cases, self.events, explicit, owners, cohort if self.cfg.use_cohort_filter else None)
+        anonymized = {o.resource for o in self.base.obs if o.category == "ANALYTICS_PROFILE" and o.state == "ANONYMIZED" and not o.idents}
+        self.chain_events = []                                   # every completed policy action that belongs to some known user
+        for rid, evs in self.events_by_resource.items():
+            owners = set(self.link.resource_users.get(rid, ()))
+            for e in evs:
+                if e.source == "deletion_worker" and e.result == "SUCCESS" and e.event_type in CHAIN_POSITION and owners:
+                    self.chain_events.append((e.t, CHAIN_POSITION[e.event_type], owners))
+        has_own = {c.case_id for c in cases if any(x.startswith("analytics_") for x in self.link.resources_of(set(c.users)))}
+        self.analytics_asg = dsc.assign_anonymized_analytics([c for c in cases if c.case_id not in has_own], self.events, anonymized, chain, self._foreign_chain)
+
+    def _foreign_chain(self, case: "dsc.CaseKey", e: "dsc.Event") -> bool:
+        """True when e is followed by another user's completed policy actions at chain spacing (a decoy user's deletion)."""
+        for t, k, owners in self.chain_events:
+            d = (t - e.t).total_seconds()
+            if 0 < d < 1500 and dsc.chain_ok(d, k) and not (owners & case.users):
+                return True
+        return False
+
+    # ------------------------------------------------------------------ one case
+    def audit(self, case_id: str) -> CaseResult:
+        try:
+            return self._audit(case_id)
+        except Exception as e:  # noqa: BLE001 - one bad case must never crash the full run
+            log.exception("case %s failed, falling back to a conservative row", case_id)
+            return CaseResult(case_id, "NOT_APPLICABLE", [], [f"FALLBACK: {type(e).__name__}: {e}"])
+
+    def _audit(self, case_id: str) -> CaseResult:
+        r = self.requests[case_id]
+        cls = self.classification[case_id]
+        if cls.label != DELETION:
+            return CaseResult(case_id, "NOT_APPLICABLE", [], [f"not a deletion request: {'; '.join(cls.reasons)} [{cls.method}]"])
+        users = self.users[case_id]
+        notes: list[str] = []
+        if not users:
+            return CaseResult(case_id, "NOT_APPLICABLE", [], ["FALLBACK: request email matches no known identity"])
+        t0, audit_at = r.requested_at, r.audit_at
+        later: list[tuple[str, str, str]] = []
+
+        # ---- resources of this case
+        resources: dict[str, str] = {}                           # resource -> how it was found
+        for rid in self.link.resources_of(users):
+            first = self.link.first_link_time(rid, users)
+            if first is not None and first[0] > audit_at:
+                if not self.cfg.allow_later_linking:
+                    continue
+                later.append((rid, first[1], first[0].strftime("%Y-%m-%dT%H:%M:%SZ")))
+            resources[rid] = "explicit"
+        acct = self.account_asg.get(case_id)
+        activity_for: dict[str, dsc.Event | None] = {}
+        if acct and acct.resource and acct.resource not in resources:
+            resources[acct.resource] = acct.how
+            activity_for[acct.resource] = acct.event
+        ana = self.analytics_asg.get(case_id)
+        if ana and ana.resource and ana.resource not in resources:
+            resources[ana.resource] = f"analytics-{ana.how}"
+            activity_for[ana.resource] = ana.event
+
+        # ---- state at audit_at
+        states: dict[str, ResourceState] = {}
+        for rid in resources:
+            st = resolve(self.link.by_resource.get(rid, []), t0, audit_at)
+            if st is not None:
+                states[rid] = st
+        # an account known only from the activity stream has no observation: treat as absent (claim) and cite the activity id
+        steps: list[dict] = []
+        violations = []
+        compliant = []
+        for rid, st in states.items():
+            v = self.policy.judge(st.category, st.state)
+            if v is None:
+                notes.append(f"{rid}: state {st.state} for {st.category} says nothing about policy; ignored")
+                continue
+            (violations if v.violation else compliant).append((st, v))
+        # accounts with no state evidence in the window: discovered through the activity stream, or linked explicitly by a
+        # later snapshot of this same scenario (first seen between the request and a week after audit_at)
+        unobserved_accounts = []
+        for rid, how in resources.items():
+            if rid in states or not rid.startswith("account_"):
+                continue
+            first = min((o.file_t for o in self.link.by_resource.get(rid, [])), default=None)
+            if how != "explicit" or (first is not None and t0 <= first <= audit_at + timedelta(days=LATER_LINK_MAX_DAYS)):
+                unobserved_accounts.append(rid)
+        # other linked resources with no state evidence in the window that first appear at/after the request (e.g. a retained
+        # audit record seen only in a later snapshot of the cohort): their END state is still a required check, with no citation
+        unobserved_linked = []
+        for rid, how in resources.items():
+            if rid in states or how != "explicit" or rid.startswith("account_"):
+                continue
+            seen = self.link.by_resource.get(rid, [])
+            first = min((o.file_t for o in seen), default=None)
+            if first is not None and t0 <= first <= audit_at + timedelta(days=LATER_LINK_MAX_DAYS):
+                unobserved_linked.append((rid, max(seen, key=lambda o: o.file_t)))
+
+        status = "INCOMPLETE" if violations else "COMPLETE"
+        cite_ok = status == "COMPLETE"
+        for st, v in violations:
+            steps.append(make_step("FINDING", v.treatment.finding, st.system, st.resource, st.file_id))
+            steps.append(make_step("REMEDIATION", v.treatment.fix, st.system, st.resource))
+            steps.append(make_step("VERIFICATION", v.treatment.verify, st.system, st.resource))
+        for st, v in compliant:
+            if v.emit_verification:
+                steps.append(make_step("VERIFICATION", v.treatment.verify, st.system, st.resource, st.file_id if cite_ok else ""))
+        if not cite_ok:
+            for rid, o in unobserved_linked:
+                v = self.policy.judge(o.category, sorted(self.policy.treatment_for(o.category).ok)[0])
+                if v is not None and v.emit_verification:
+                    steps.append(make_step("VERIFICATION", v.treatment.verify, o.system, rid, ""))
+                    notes.append(f"{rid}: no state evidence in the window; end-state check added from its later/linked observation ({o.file_id})")
+        for rid in unobserved_accounts:                          # account known only from the activity stream
+            ev = activity_for.get(rid)
+            cite = ""
+            if cite_ok:
+                cite, how = self._cite_unobserved("account_service", r, states, ev)
+                notes.append(f"{rid}: no observation in window; cited {cite!r} ({how})")
+            steps.append(make_step("VERIFICATION", "VERIFY_RECORD_ABSENT", "account_service", rid, cite))
+        if not steps:
+            return CaseResult(case_id, "NOT_APPLICABLE", [], ["FALLBACK: deletion request but no evidence-backed resource in the request window"], later)
+        steps = canonicalize(steps)
+        issues = [i for i in validate_case(case_id, status, steps) if i.severity == "error"]
+        if issues:
+            return CaseResult(case_id, "NOT_APPLICABLE", [], [f"FALLBACK: validator rejected row: {issues[0]}"], later)
+        return CaseResult(case_id, status, steps, notes, later)
+
+    # ------------------------------------------------------------------ citation fallback for unobserved resources
+    def _cite_unobserved(self, system: str, r: Request, states: dict[str, ResourceState], ev: "dsc.Event | None") -> tuple[str, str]:
+        """No evidence file observes the resource. Prefer a snapshot that covers the system AND observes the case's other
+        records (same cohort); then any covering snapshot in the window; finally the activity id of the delete claim."""
+        case_files = {st.file_id for st in states.values()}
+        cov = [c for c in self.base.coverage if c.system == system and r.requested_at <= c.file_t <= r.audit_at]
+        same = sorted((c for c in cov if c.file_id in case_files), key=lambda c: c.file_t)
+        if same:
+            return same[-1].file_id, "snapshot covering the system and observing the case's other records"
+        if cov:
+            return max(cov, key=lambda c: c.file_t).file_id, "latest snapshot covering the system in the window"
+        if ev is not None:
+            return ev.activity_id, "ASSUMPTION: activity_id used because no file observes the resource"
+        return "", "no citation available"

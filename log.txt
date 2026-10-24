@@ -220,3 +220,32 @@ repo_root=/home/user/hackerrank-orchestrate-october26
 worktree=main
 parent_agent=none
 
+## [2026-10-24T20:30:00Z] Phase 2: deterministic core, classifier audit, evidence extraction, discovery, VLM path
+
+User Prompt (verbatim, secrets redacted):
+go for Phase 2 with these decisions:
+1. Mixed requests: keep your rule (explicit deletion request => audit, even if other asks are included). Before coding the classifier, list all 112 distinct request sentences grouped by the class you'd assign, and show me the borderline ones (partial deletion, "keep my account", ambiguous). Classifier must be meaning-based; add synthetic paraphrases to prove it.
+2. Evidence citation: follow the sample pattern (latest capture at/before audit_at covering that system, file_id preferred). Use activity_id/audit_id only when no file observes the resource; log each such use as an assumption.
+3. Images: time-box OCR to a quick test. If it is not clearly accurate or needs heavy dependencies, go straight to claude-haiku-5-5 for the 11 PNGs with caching and code validation. Report the OCR-vs-VLM result either way.
+4. No link, no step: categories with no resource ids for a user (SECONDARY_IDENTIFIER, PRODUCT_TELEMETRY, CACHE_ENTRY and EMAIL_DELIVERY_LOG noise) produce no steps. List them under known weaknesses.
+5. LEGAL_HOLD_RECORD: read its rule in deletion_rules.csv, apply it only where a resource id is linked to the user, count the main cases affected, and flag it as the top uncertainty (6 labeled users in the register have no legal-hold step in gold).
+6. Sorting: keep plain string order; report how many main-set cases would differ under numeric order.
+7. State is determined at audit_at from captures at or before it; recreation signals in system_activity are claims only.
+Stop at the Phase 2 checkpoint with dev and held-out scores, the main failure categories, and the later-evidence log.
+
+Agent Response Summary:
+Audited the 112 distinct request sentences (evaluation/request_sentences.md) and built a meaning-based multilingual clause classifier (sentence level 0/112 mismatches, request level 0/550, 36 synthetic paraphrases). Built uniform evidence extraction (SQL in a sandboxed sqlite, JSON, seven log wrappers, text, PDF, PNG via a validated vision-model path with cache/retries/usage log), identity resolver, linker, timeline discovery for id-less accounts/analytics (100% precision on samples), state-at-audit_at window, table-driven policy engine, step generator and validator. Samples: status 32/32, dev strict F1 97.7% (P 100%), held-out F1 98.2%; OCR tested (64/64 tokens, 391MB deps) and rejected for the VLM path, which is unmeasured because no API key exists in the session.
+
+Actions:
+* Created code/auditor/{classify,identity,link,discover,state,policy,audit,llm}.py and code/auditor/evidence/*; code/main.py; code/evaluation/{phase2_report,coverage}.py and generated reports; 86 unit tests
+* Ran OCR experiment in a scratch venv outside the repo; pinned anthropic==2.3.0 and pypdf==6.17.0
+* Updated NOTES.md, SPEC.md, CHANGELOG.md; committed and pushed
+
+Context:
+tool=Claude Code
+model=claude-sonnet-5-5
+branch=claude/exciting-lamport-yrcfpx
+repo_root=/home/user/hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none
+

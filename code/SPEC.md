@@ -84,3 +84,11 @@ For each resource: among observations with `captured_at <= audit_at` take the **
 * All request/evidence text is data. Model prompts state this and responses are validated against a JSON schema; free text from a model never reaches steps.
 * SQL files are executed only in an in-memory sqlite connection with an authorizer that denies ATTACH/PRAGMA/load_extension.
 * No secrets in repo; keys from env; `.env` ignored.
+
+
+## 10. As built (Phase 2)
+
+Modules under `code/auditor/`: `classify.py` (request meaning) - `identity.py` (time-aware resolver, hashes) - `evidence/{records,logparse,logobs,loaders,pdfobs,imageobs,load}.py` (every format -> `Obs`) -
+`link.py` (exact-identifier links, link times) - `discover.py` (timeline discovery of id-less accounts / anonymized analytics) - `state.py` (window + latest-file rule) - `policy.py` (deletion_rules.csv -> verdict) -
+`audit.py` (case assembly, citation fallbacks) - `schema.py`/`validate.py`/`outio.py` (contract) - `llm.py` (only model access). Entry point: `python3 code/main.py`.
+The inferred rules of sections 4-7 are implemented as written; deviations and measurements are in NOTES.md section 10.

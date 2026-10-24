@@ -241,10 +241,88 @@ cohort count matching (k unlinked resources vs k unlinked cases in the same R-gr
 ### 9.7 Later-evidence linking log (D3) - one line per use
 | date | case | resource_id | linked via (file_id, captured_at) | audit_at | effect |
 |---|---|---|---|---|---|
-| (pipeline not written yet - no uses so far) | | | | | |
+| see `evaluation/later_evidence_log.md` (generated; one row per use with the steps it added) | | | | | |
 Known candidate from Phase 0: sample case_26 `account_5684` appears with its owner only in `evidence_02` (captured 2026-09-17, after audit_at 2026-09-15).
 
 ### 9.8 Open items for the next checkpoints
 * Mixed requests (e.g. "stop marketing emails AND delete my account"; "delete only my marketing profile, keep the account"): working rule = explicit authorization to delete the account -> deletion audit even if other asks are present;
   deletion limited to a subset of categories or "keep the account" -> NOT_APPLICABLE. Assumption to confirm with synthetic cases in Phase 4.
 * Behaviour when a case has no evidence at all captured <= `audit_at` (count in Phase 2).
+
+## 10. Phase 2 - what was built, measured, assumed
+
+All numbers: `python3 code/evaluation/phase2_report.py` (-> `evaluation/phase2_results.md`, `later_evidence_log.md`) and `evaluation/coverage.py`.
+
+### 10.1 Request classifier (meaning-based; no case ids, no templates)
+* `evaluation/request_sentences.md` lists all **112 distinct sentences** of the 550 request texts by the class I assign (DELETE 36, AUDIT 7, CONTEXT 16, ALLOW 4, SCOPE 16, COURTESY 13, NONDELETE 20).
+  The main set is built from this fixed pool: only the 10 non-deletion requests and the hand-written samples have unique sentences.
+* `auditor/classify.py` labels CLAUSES (DELETE / AUDIT / SUPPORT / NEGATED / NONDELETE / CONTEXT / NEUTRAL) with small multilingual lexicons (en, es, fr, pt, de, it, ja, ko) and decides at request level:
+  an un-negated DELETE/AUDIT clause -> deletion audit, even if other asks are present (your rule); a refusal ("do not close", "keep my account", "not asking for deletion") -> NOT_APPLICABLE;
+  removal limited to marketing ("remove me from marketing lists only") -> NOT_APPLICABLE; narrated deletion + a request to act on it ("I was told it was deleted ... please handle them") -> deletion audit.
+  **Contradictory text and "mentions the deletion request but never states the wish" are AMBIGUOUS** -> optional LLM tie-breaker (validated enum, injection-safe) or, without one, conservatively NOT_APPLICABLE and logged.
+* Results: sentence level **0 mismatches of 112**; request level **0 mismatches of 550** (540 deletion, 10 not applicable, 0 ambiguous); 8 classifier tests incl. 36 synthetic paraphrases (multilingual, mixed, partial-deletion, contradictory, injection-style).
+* Borderline sentences (decisions): "Remove me from marketing lists only" -> NONDELETE (verb scoped to marketing); "correct it without removing any of my records" -> NEGATED; "Do not close the account" -> NEGATED;
+  "Please keep the account as it is" / "leave my profile ... in place" -> NEGATED; "I still use it, so please don't delete or change anything" -> NEGATED; "not a request to erase it" -> NEGATED;
+  "I would like it closed" / "close this account permanently" / "I'm deleting my account" -> DELETE (closure = deletion of the account); "I no longer need this account" -> CONTEXT (no verb of removal);
+  "Can you tell me what personal information you hold" -> NONDELETE (access) but "tell me whether the account ... have already been removed" -> AUDIT; "You may retain backups ..." / "Security records can stay" -> ALLOW (does not cancel the deletion).
+* A mixed request is judged by the clause that states the wish: "stop the promotional emails AND delete my account" -> deletion audit; "delete only the newsletter subscription, keep my account" -> not applicable.
+
+### 10.2 Evidence extraction (code only, except PNG)
+* One uniform `Obs` record (resource, category, state, identifiers, file, capture time) from: SQL (executed in an in-memory SQLite with an authorizer that allows only CREATE TABLE/INDEX, INSERT, reads; ATTACH, PRAGMA writes, DROP, DELETE are denied and tested),
+  JSON (bundles, service exports, ledgers), seven log wrappers (one generic parser), the text handover, PDFs (pypdf), and PNGs (vision model, see 10.7). 2,895 observations; 0 unreadable files; unreadable files become warnings.
+* The state vocabulary of every format lands in one table (`records.COLLECTION_RULES`, `records.LOOKUP_RULES`, `logobs.EVENT_RULES`); the policy engine (`policy.py`) turns (category, state) into a verdict using `deletion_rules.csv`.
+* Meaning of log events decided from the data, e.g. `connector_heartbeat enabled=true scheduler_registered=true` = ACTIVE flow; `restore_candidate_evaluated eligible=true deletion_block=false` = restorable; `restore_authorization_completed decision=deny` = blocked;
+  `contact_lookup_completed rows=1` found only through the hash of an old e-mail and `contact_query_completed`/`deletion_marker_check marker_found=false` = SECONDARY_IDENTIFIER (rule DELETE).
+  A literal `null`/`None` in a log field is a missing value (found as a real bug: it made fully anonymized analytics look exposed).
+
+### 10.3 State at audit_at (decision D3 applied)
+* **A resource's state comes only from files captured in [requested_at, audit_at]** (assumption A6). Later files are never used for state or cited (validator-enforced). Files from before the request describe another scenario of the same person
+  (users with two requests) and would resurrect resources; linking alone attaches resources of another scenario to one sample user (a stale account and a stale tombstone); the window keeps them out.
+* Later evidence is used only to LINK resources to users (D3). Main set: **224 uses in 153 cases, 153 of them add at least one step** (`evaluation/later_evidence_log.md`). Samples: 32/32 status either way.
+  **Score with vs without later linking**: all 32 samples strict F1 **97.9% vs 96.2%** (dev 97.7 vs 96.2; held-out 98.2 vs 96.4; precision 100% both). The extra steps are retained records (audit records) and accounts seen only in a later snapshot of the same cohort;
+  they appear in INCOMPLETE rows as end-state checks with an empty evidence_id (assumption A7: first seen between requested_at and audit_at + 7 days; every sample use was 2 days after audit_at).
+* Within one file the violating copy wins (replication drift: a stale replica row counts); across files the latest capture wins; inside a log the last event wins.
+
+### 10.4 Resources with no identifier (accounts, anonymized analytics): discovery and its measured precision
+* Evidence ties a deleted account to nobody (a 404 with no owner) and a fully anonymized analytics record to nobody. The activity timeline is the only link:
+  the account delete lands 45-75 min before `reported_at`, the analytics anonymization ~29 min before; per-case policy actions are spaced 390 or 449 s apart (71 of 72 measured gaps).
+  Cases that share a `reported_at` interleave, so assignment is by **elimination** only (accounts linked to someone else or already assigned are removed; a case is accepted only when exactly one candidate remains), narrowed softly by
+  (a) the cohort snapshot that also observes the case's other records and (b) **the delete event's result = the case's reported_status (SUCCESS/FAILED/PARTIAL = COMPLETE/NOT_STARTED/PARTIALLY_COMPLETE: 189 of 189 explicit cases)** - used only to match an event to a case, never as a claim about state.
+  Anonymized analytics additionally use chain timing (the candidate must sit 390/449 s before the case's own linked support/flow/backup action) and are dropped when another user's completed chain follows them (decoy users) or the case already has its own analytics record.
+* **Measured on the 32 samples: accounts - 27 assigned, 27 correct, 0 wrong, 5 omitted (explicit 13, eliminated 14); anonymized analytics - 5 assigned, 5 correct, 2 omitted.** Your threshold (clearly above 50%) is met (100% on what is assigned), so they are used; ambiguous groups stay unresolved.
+* **Rejected by measurement**: the zero-padded-number convention (`user_N` -> `account_0NN`). It is right for hand-authored users 1-10 but wrong for user_50 (`account_050` exists, the gold account is another id). Not used.
+* Main set: **370 of 508 deletion requests get an account step; 138 do not** (100 ambiguous timelines, 27 without any candidate, 11 hand-authored/image-only). That is the biggest expected loss.
+
+### 10.5 Evidence citation (assumption log)
+* A finding / COMPLETE verification cites the file whose observation produced the state (latest in window); an INCOMPLETE row's remediation and verification steps cite nothing (confirmed from the samples).
+* A resource no file observes (an account known only from the timeline) is cited as: a snapshot that covers its system AND observes the case's other records; else the latest covering snapshot in the window; else the activity id of the delete claim.
+  **Activity-id citations used in the main run: 1** (assumption log in the run notes). Samples: 0.
+* Known mismatch kept: hand-authored sample case where the gold cites an earlier account snapshot than the one the rule picks (the account is not found there anyway, see 10.6).
+
+### 10.6 Remaining differences on the dev samples (6 missing steps, 0 wrong steps)
+* 3 steps unreachable: an audit record id that appears in no participant file (two cases) and an account with no activity at all. Held-out misses are not examined.
+* 3 steps: an account whose timeline group is ambiguous.
+
+### 10.7 OCR vs VLM (time-boxed test, decided by measurement)
+* OCR: `rapidocr-onnxruntime` 1.2.3 (+ onnxruntime 1.31.0, opencv-python 5.0.0.93, numpy 2.5.4, Shapely 2.2.0, pyclipper, Pillow, PyYAML = a 391 MB venv). Read **all 64 of 64** expected tokens (resource ids, e-mails, user ids, state words) from the 11 PNGs, 1.3-2.2 s per image on CPU.
+  Rejected anyway: heavy dependency set that must also install on the grader's machine, and raw text still needs a layout-specific parser per console (11 layouts).
+* VLM path built (`llm.py`, `evidence/imageobs.py`): `claude-haiku-5-5` (fallback `claude-sonnet-5-5`), structured JSON schema, code validation of every field, disk cache by (file sha256, prompt version, model, schema), retries with backoff, usage log, no prices unless `AUDITOR_PRICES_FILE` is supplied by you (source + date recorded).
+  **VLM accuracy is NOT measured: no ANTHROPIC_API_KEY exists in this session.** Plumbing is tested with a fake client and with fixture readings. Without a key the 9 main cases whose evidence is a PNG fall back to a conservative NOT_APPLICABLE row (logged); with a key they produce findings (checked with fixture readings).
+* Ablation deterministic-only vs full: identical on all 32 samples (none depends on a PNG); the 9 image cases are the only difference.
+
+### 10.8 Top uncertainties and known weaknesses (honest list)
+1. **LEGAL_HOLD_RECORD** (rule 13: RETAIN while a legal hold is active): applied only where a `legal_hold_*` id is linked to the user -> **7 main cases** get `VERIFY_RECORD_PRESENT`; no labeled sample has a legal-hold step and the six users of the register PDF (all samples) have none in gold. Cannot be validated.
+2. Missing account step in ~27% of deletion rows (ambiguous or absent timeline) and anonymized analytics when cases share a `reported_at`. Precision is protected on purpose (omit instead of guess).
+3. Records the evidence never shows (e.g. two sample audit records) cannot be produced by any method.
+4. **No link, no step**: PRODUCT_TELEMETRY has no records; CACHE_ENTRY (284 ids) and EMAIL_DELIVERY_LOG (368 ids) exist only as noise rows in system_activity; they never produce steps. SECONDARY_IDENTIFIER is thin (2 samples), MARKETING_PROFILE is image-only.
+5. Image evidence needs the API key; VLM accuracy unmeasured. 9 rows are conservative fallbacks until then.
+6. Plain-string resource ordering: 1 of 499 rows differs from numeric order (risk is small).
+7. Several constants were set from the labeled data: windows (-90..+15 min accounts, -45..-5 analytics), chain gaps (390/449 s), the 7-day later-link bound. They are documented, unit-tested and measured, but tuned on 23 dev cases; the held-out set (9 cases) is the only independent check and is small.
+   **Honesty note**: the rules were first inferred in Phase 0 by reading all 32 gold answers, so "held-out" means "not looked at while tuning in Phase 2", not "never seen".
+8. Classifier lexicons cover 8 languages; other languages end in AMBIGUOUS -> tie-breaker or conservative NOT_APPLICABLE. The LLM tie-breaker path is tested with fakes only.
+9. `export download_available=false` is read as "absent" (assumption A8); a support message is "exposed" when any direct identifier is stored or quoted (A9); a hash-only opt-in contact is a SECONDARY_IDENTIFIER (A10).
+
+### 10.9 Questions for the user (Phase 2 checkpoint)
+1. Provide `ANTHROPIC_API_KEY` (and optionally `AUDITOR_PRICES_FILE`) for a real image read, or accept the 9 conservative fallback rows for now?
+2. Keep "omit rather than guess" for ambiguous accounts (current), or output the single most plausible account when only 2 candidates remain (expected precision 50%)?
+3. Legal holds: keep applying them (7 cases) or drop them until a labeled example exists?

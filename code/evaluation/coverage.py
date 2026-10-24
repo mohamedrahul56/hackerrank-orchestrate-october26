@@ -1,151 +1,80 @@
 #!/usr/bin/env python3
-"""Coverage of the deletion_rules.csv categories: how much of each category exists in the data, how many
-main-set cases explicitly involve it, and how many labeled samples exercise it. Writes coverage_report.md.
+"""Coverage of the deletion_rules.csv categories by the pipeline's own interpretation of the evidence.
 
-IMPORTANT LIMITS (also printed in the report):
-  * "main-set cases" counts only cases whose user is tied to a resource of that category by an EXPLICIT identifier
-    (current/old email, user_id, email hash, phone) found in the same record/log trace/catalog row. Deleted accounts and
-    fully anonymized records carry no identifier, so this is a LOWER BOUND, not the true involvement.
-  * No time filter is applied (a resource counts even if its only evidence is later than the case's audit_at).
-This is an estimate for planning synthetic tests; the Phase 2 linker will replace it.
+  python3 code/evaluation/coverage.py   ->  evaluation/coverage_report.md
+
+For every data category: how many distinct resources of that category exist in the evidence, how many MAIN-set cases end up with a
+step on one (what the pipeline links to the case), and how many labeled SAMPLES have one in the gold answer. Categories no sample
+covers are the ones that need synthetic evaluation cases (Phase 4).
 """
 from __future__ import annotations
 
-import csv
+import collections
 import json
-import re
 import sys
-from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "code"))
 D = ROOT / "dataset"
 
-# resource-id prefix -> category name used in deletion_rules.csv (support_ is split below)
-PREFIX_CATEGORY = {
-    "account": "USER_PROFILE", "search": "SEARCH_INDEX_ENTRY", "cache": "CACHE_ENTRY", "analytics": "ANALYTICS_PROFILE",
-    "export": "USER_EXPORT", "marketing": "MARKETING_PROFILE", "email_delivery": "EMAIL_DELIVERY_LOG",
-    "audit_record": "SECURITY_AUDIT_LOG", "legal_hold": "LEGAL_HOLD_RECORD", "backup": "BACKUP_ARCHIVE",
-    "tombstone": "ACCOUNT_TOMBSTONE", "object": "SUPPORT_ATTACHMENT", "data_flow": "(DATA_FLOW: no rule row)",
-}
-RES = re.compile(r"\b(account|search|support|analytics|export|data_flow|backup|audit_record|tombstone|legal_hold|marketing|cache|email_delivery|object)_(\d+)\b")
-
-
-def rd(name: str) -> list[dict[str, str]]:
-    with (D / name).open(newline="", encoding="utf-8") as fh:
-        return list(csv.DictReader(fh))
-
-
-def category_of(res: str, blob: str) -> str:
-    prefix = res.rsplit("_", 1)[0]
-    if prefix == "support":
-        return "SUPPORT_ATTACHMENT" if "attachment" in blob.lower() else "SUPPORT_MESSAGE"
-    return PREFIX_CATEGORY[prefix]
-
-
-def blobs() -> list[tuple[str, bool]]:
-    """(text, from_evidence_file) record-sized chunks from every text-bearing evidence file + system_activity rows."""
-    out: list[tuple[str, bool]] = []
-    for p in sorted((D / "evidence").glob("*/*")):
-        if p.suffix in (".png", ".pdf"):
-            continue
-        text = p.read_text(encoding="utf-8", errors="replace")
-        if p.suffix == ".json":
-            def walk(o, ctx=""):
-                if isinstance(o, dict):
-                    ctx = o.get("collection", ctx) if isinstance(o.get("collection"), str) else ctx
-                    if "resource_id" in o:
-                        out.append((ctx + " " + json.dumps(o, ensure_ascii=False), True))
-                    for v in o.values():
-                        walk(v, ctx)
-                elif isinstance(o, list):
-                    for v in o:
-                        walk(v, ctx)
-            walk(json.loads(text))
-        else:
-            lines = text.splitlines()
-            groups: dict[str, list[str]] = defaultdict(list)
-            for i, line in enumerate(lines):
-                m = re.search(r"(?:trace_id|requestId)[=\":]+\s*\"?([\w-]+)", line)
-                groups[m.group(1) if m else f"line{i}"].append(line)   # started/completed lines share a trace id
-            out += [("\n".join(v), True) for v in groups.values()]
-    out += [(r["details"] + " " + r["resource_id"], False) for r in rd("system_activity.csv")]
-    return out
+from auditor.audit import Auditor  # noqa: E402
+from auditor.dataset import load_requests  # noqa: E402
+import csv  # noqa: E402
 
 
 def main() -> int:
-    ids = rd("user_identities.csv"); aud = rd("user_audit_log.csv")
-    tok: dict[str, str] = {}
-    for u in ids:
-        for k in ("email", "email_hash", "phone"):
-            tok[u[k].lower()] = u["user_id"]
-        tok[u["user_id"]] = u["user_id"]
-    for a in aud:
-        if a["field_name"] in ("email", "email_hash", "phone"):
-            tok[a["old_value"].lower()] = a["user_id"]
-    # boundaries stop 'user_1' matching inside 'user_12' and 'a@b.com' inside 'xa@b.com'
-    tokre = re.compile(r"(?<![A-Za-z0-9_.+-])(?:" + "|".join(sorted(map(re.escape, tok), key=len, reverse=True)) + r")(?![A-Za-z0-9_])", re.I)
-    email_user = {u["email"].lower(): u["user_id"] for u in ids}
-    email_user.update({a["old_value"].lower(): a["user_id"] for a in aud if a["field_name"] == "email"})
+    a = Auditor(D)
+    category_of: dict[str, str] = {}
+    for rid, obs in a.link.by_resource.items():
+        category_of[rid] = max(obs, key=lambda o: o.file_t).category
+    for row in a.catalog:                                          # catalog-only resources (e.g. a marketing profile seen in a PNG)
+        category_of.setdefault(row["resource_id"], {"marketing": "MARKETING_PROFILE", "object": "SUPPORT_ATTACHMENT"}.get(row["resource_id"].rsplit("_", 1)[0], ""))
+    ids_by_cat = collections.defaultdict(set)
+    for rid, cat in category_of.items():
+        if cat:
+            ids_by_cat[cat].add(rid)
+    only_activity = collections.defaultdict(set)                   # resources that exist ONLY as operational noise in system_activity
+    for rid in a.events_by_resource:
+        if rid not in category_of:
+            only_activity[{"cache": "CACHE_ENTRY", "email_delivery": "EMAIL_DELIVERY_LOG"}.get(rid.rsplit("_", 1)[0], "")].add(rid)
 
-    all_res: dict[str, set[str]] = defaultdict(set)          # category -> resource ids
-    linked: dict[str, set[str]] = defaultdict(set)           # category -> user ids
-    in_evidence: dict[str, set[str]] = defaultdict(set)      # category -> ids seen in at least one evidence file
-    for b, from_file in blobs():
-        users = {tok[m.group(0).lower()] for m in tokre.finditer(b)}
-        for m in RES.finditer(b):
-            res = m.group(0)
-            cat = category_of(res, b)
-            all_res[cat].add(res)
-            if from_file:
-                in_evidence[cat].add(res)
-            linked[cat] |= users
+    prefix_default = {"account": "USER_PROFILE", "analytics": "ANALYTICS_PROFILE", "audit_record": "SECURITY_AUDIT_LOG"}   # resources known only from the activity stream
+    category_of = collections.defaultdict(lambda: "?", category_of)
+    main_ids = [r.case_id for r in load_requests(D / "deletion_requests.csv")]
+    main_cases = collections.defaultdict(set)
+    for cid in main_ids:
+        for s in a.audit(cid).steps:
+            main_cases[category_of[s["resource_id"]] if s["resource_id"] in category_of else prefix_default.get(s["resource_id"].rsplit("_", 1)[0], "?")].add(cid)
+    sample_cases = collections.defaultdict(set)
+    with (D / "sample_output.csv").open(encoding="utf-8") as fh:
+        for r in csv.DictReader(fh):
+            for s in json.loads(r["steps_json"]):
+                sample_cases[category_of[s["resource_id"]] if s["resource_id"] in category_of else prefix_default.get(s["resource_id"].rsplit("_", 1)[0], "?")].add(r["case_id"])
 
-    main_cases = rd("deletion_requests.csv")
-    case_user = {c["case_id"]: email_user[c["email"].strip().lower()] for c in main_cases}
-    user_cases: dict[str, list[str]] = defaultdict(list)
-    for c, u in case_user.items():
-        user_cases[u].append(c)
-
-    # labeled samples: category from the gold answer (support_ split by the treatment applied)
-    gold = {r["case_id"]: json.loads(r["steps_json"]) for r in rd("sample_output.csv")}
-    sample_cats: dict[str, set[str]] = defaultdict(set)
-    for cid, steps in gold.items():
-        for s in steps:
-            res = s["resource_id"]; prefix = res.rsplit("_", 1)[0]
-            if prefix == "support":
-                treated = {x["operation"] for x in steps if x["resource_id"] == res}
-                cat = "SUPPORT_ATTACHMENT" if treated & {"DELETE_RECORD", "VERIFY_RECORD_ABSENT"} else "SUPPORT_MESSAGE"
-            else:
-                cat = PREFIX_CATEGORY[prefix]
-            sample_cats[cat].add(cid)
-
-    rules = rd("deletion_rules.csv")
-    order = [r["data_category"] for r in rules] + ["(DATA_FLOW: no rule row)"]
-    action = {r["data_category"]: r["required_action"] for r in rules}
-    L = ["# Coverage of deletion_rules.csv categories", "",
-         "Generated by `python3 code/evaluation/coverage.py`. **Main-set counts are a lower bound** (explicit identifier links only; "
-         "deleted accounts and anonymized records carry no identifier). No time filter applied.", "",
-         "| category | rule action | distinct ids (evidence + activity) | of which in an evidence file | main-set cases explicitly linked (lower bound) | labeled samples covering | status |",
+    rules = a.policy.rules
+    cats = list(rules) + ["DATA_FLOW"]
+    L = ["# Coverage of deletion_rules.csv categories (generated by `python3 code/evaluation/coverage.py`)", "",
+         "Categories are the pipeline's reading of the evidence (record collection / event type), not resource-id prefixes. "
+         "`only in system_activity` = ids that exist solely as generic operational noise rows (no evidence file shows their state or owner).", "",
+         "| category | rule action | resources in evidence | only in system_activity | main-set cases with a step | labeled samples with a step | status |",
          "|---|---|---|---|---|---|---|"]
     uncovered = []
-    for cat in order:
-        n_res = len(all_res.get(cat, ()))
-        n_main = sum(len(user_cases.get(u, ())) for u in linked.get(cat, ()))
-        n_samp = len(sample_cats.get(cat, ()))
-        status = "covered" if n_samp >= 2 else ("thin (1 sample)" if n_samp == 1 else ("**NO SAMPLE** -> synthetic cases needed" if n_res or cat in action else "no data"))
-        if n_samp == 0:
+    for cat in cats:
+        n_s, n_m = len(sample_cases.get(cat, ())), len(main_cases.get(cat, ()))
+        n_e, n_a = len(ids_by_cat.get(cat, ())), len(only_activity.get(cat, ()))
+        status = "covered" if n_s >= 3 else ("thin" if n_s >= 1 else "**no labeled sample** -> synthetic cases")
+        if n_s == 0:
             uncovered.append(cat)
-        L.append(f"| {cat} | {action.get(cat, '-')} | {n_res} | {len(in_evidence.get(cat, ()))} | {n_main} | {n_samp} | {status} |")
-    L += ["", "Categories with no labeled sample (need synthetic evaluation cases): " + ", ".join(uncovered), "",
-          "Notes:", "* SECONDARY_IDENTIFIER and PRODUCT_TELEMETRY have a rule row but **no resource id prefix exists anywhere in the data** "
-          "(0 resources), so they cannot occur in the main set as separate resources.",
-          "* `support_*` ids are split into SUPPORT_MESSAGE / SUPPORT_ATTACHMENT by record context (collection `ticket_attachments`, attachment log events) "
-          "in the evidence, and by the applied treatment (delete vs redact) in the sample answers.",
-          "* Ids that occur **only in system_activity** (column 4 = 0 while column 3 > 0) are generic operational noise rows "
-          "('Profile cache refresh processed cache_N', 'Transactional email delivery processed email_delivery_N'): no evidence file ever shows such a record's state or owner, so they cannot produce findings.",
-          "* LEGAL_HOLD_RECORD exists only as `legal_hold_*` rows in SQL replicas / bundles; the legal retention register PDF names six users (user_08/12/17/21/24/29 = labeled samples case_08/12/17/21/24/29, **all six** of whose gold answers contain no legal-hold step), so that PDF is context, not a step source.",
-          "* `object_*` (object storage) appears once (a catalog row about an attachment belonging only to one user).", ""]
+        L.append(f"| {cat} | {rules.get(cat, ('(fixed by problem statement)',))[0]} | {n_e} | {n_a} | {n_m} | {n_s} | {status} |")
+    L += ["", "Categories with no labeled sample: " + ", ".join(uncovered), "",
+          "Reading the table:",
+          "* PRODUCT_TELEMETRY has no records anywhere in the data; CACHE_ENTRY and EMAIL_DELIVERY_LOG exist only as operational noise in system_activity, "
+          "so \"no link, no step\" applies and they never produce steps (listed as known weaknesses).",
+          "* SECONDARY_IDENTIFIER appears as legacy contact-index rows and as opt-in contact rows found only through the hash of an old e-mail.",
+          "* MARKETING_PROFILE's single resource is visible only in a screenshot (read by the vision model when a key is available).",
+          "* LEGAL_HOLD_RECORD: the retention-register PDF names six users, all labeled samples whose gold answers have no legal-hold step; "
+          "legal-hold rows are linked to other (main-set) users only. This is the top policy uncertainty.", ""]
     text = "\n".join(L)
     (ROOT / "code" / "evaluation" / "coverage_report.md").write_text(text, encoding="utf-8")
     print(text)

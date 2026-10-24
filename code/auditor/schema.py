@@ -57,7 +57,7 @@ def sort_key(step: dict[str, Any]) -> tuple:
     """Canonical order: phase, operation (table order), then plain-string system_id, resource_id.
 
     Plain string order for resource_id is a decision recorded in NOTES.md (ids are NOT
-    zero-padded, so e.g. 'audit_record_9528' sorts before 'audit_record_987').
+    zero-padded, so e.g. 'audit_record_1000' sorts before 'audit_record_999').
     """
     return (PHASE_RANK[step["phase"]], OP_RANK[step["operation"]], step["system_id"], step["resource_id"])
 
