@@ -320,3 +320,32 @@ branch=claude/exciting-lamport-yrcfpx
 repo_root=/home/user/hackerrank-orchestrate-october26
 worktree=main
 parent_agent=none
+
+## [2026-10-24T17:15:30Z] Phase 5: final run, reports, README, interview prep, packaging
+
+User Prompt (verbatim, secrets redacted):
+Phase 4 accepted. Proceed to Phase 5, with these rules:
+1. I run the key step myself. Do not ask me to paste any key. Check whether ANTHROPIC_API_KEY is present in your environment (never print it). If it is present and prices.json is valid, run show_image_readings.py, then do the cold-cache full run of all 518 cases with usage logging. If it is absent, say so, skip the model run, and document that the vision path was tested only with fakes.
+2. After a real run, report: how each of the 11 readings compares to what the code expected, the status counts before/after, and which of the 9 provisional rows changed. Re-run twice to confirm determinism with a warm cache, and once more with a cleared cache to measure model nondeterminism (report row-level differences).
+3. Generate evaluation/evaluation_report.md and evaluation/usage_report.md from real logged numbers only. The usage report must cover the final full-dataset run that produced output.csv: providers and model names, number of calls, input and output tokens, total and average per request, estimated cost per request and total (or the exact line "cost not computed - prices not supplied"). Both must render fully as Markdown.
+4. evaluation_report.md must contain: case-level status accuracy with confusion matrix, step-level and field-level accuracy, sequence accuracy (exact and LCS), the 23 synthetic cases, the ablations (timing heuristics, discovery, later-evidence linking, deterministic-only vs with-vision), failures found and improvements made, and the unmeasured list. Call the 9 held-out cases "not tuned against in Phase 2-3".
+5. Update README: setup, one-command run, architecture, design decisions with rejected alternatives, honest known weaknesses, the timing-heuristic limitation, the provisional rows.
+6. Write code/INTERVIEW_PREP.md: 2-minute architecture explanation, design decisions and rejected alternatives, the score table (baseline -> final, what each change moved, what was reverted), known weaknesses, and 20 likely interviewer questions with answers grounded in this code and these numbers (include: why mostly deterministic, why omit-when-unsure, why timing heuristics are risky, what the 100% precision does and does not prove, how prompt injection is handled, why 9 rows are provisional, how the usage is so low).
+7. Build code.zip with the packaging tool, verify the contents, and give me the final checklist with each item marked verified or not, including: output.csv has 518 rows sorted per the input order; log.txt is complete at the path the repo requires; the agent-trace export steps; exact files to upload.
+Stop at the final checkpoint. Do not push anything containing keys, prices.json or dataset-derived emails.
+
+Agent Response Summary:
+Checked the environment: ANTHROPIC_API_KEY and ANTHROPIC_AUTH_TOKEN absent and no prices.json, so the model run, show_image_readings and the cleared-cache nondeterminism measurement were skipped and documented (vision path tested with fakes only; 0 calls, 0 tokens). Produced output.csv with the deterministic path (COMPLETE 152, INCOMPLETE 356, NOT_APPLICABLE 10, 9 provisional, validator errors 0), generated evaluation_report.md and usage_report.md from live numbers and the run log, rewrote README, wrote INTERVIEW_PREP.md, added final_check.py and a Markdown well-formedness test, built code.zip and verified it.
+
+Actions:
+* Added code/evaluation/evaluation_report.py, mdfmt.py, code/tools/final_check.py, tests/test_reports_markdown.py; main.py now writes a run_info row to output.usage.jsonl; usage_report.py reads it
+* Generated code/evaluation/{evaluation_report,usage_report,phase4_results}.md; rewrote README.md; wrote code/INTERVIEW_PREP.md; updated NOTES (section 13), CHANGELOG rows 31-33, SUBMISSION_CHECKLIST
+* Ran main.py (output.csv at the repo root), the test suite, package.py --require-final, final_check.py; committed and pushed (no keys, no prices.json, no dataset e-mails)
+
+Context:
+tool=Claude Code
+model=claude-sonnet-5-5
+branch=claude/exciting-lamport-yrcfpx
+repo_root=/home/user/hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none

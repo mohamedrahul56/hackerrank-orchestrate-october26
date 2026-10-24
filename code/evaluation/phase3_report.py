@@ -26,6 +26,7 @@ from auditor.audit import Auditor, Config  # noqa: E402
 from auditor.dataset import load_requests  # noqa: E402
 from holdout import HEADER, account_holdout, analytics_holdout, f1_effect_of_guessing  # noqa: E402
 from phase2_report import as_rows, classify_missing, metrics_line, pct, run  # noqa: E402
+from mdfmt import kv  # noqa: E402
 from score import assign_splits, read_rows, score  # noqa: E402
 
 D = ROOT / "dataset"
@@ -81,13 +82,13 @@ def main() -> int:
     unlinked_present = sorted({o.resource for o in obs_up if o.state == "PRESENT" and not a_full.link.resource_users.get(o.resource)})
     L += ["## 2. The questions asked before iterating", "",
           "### (a) Could a missing account step change `deletion_status`?", "",
-          f"* USER_PROFILE observations without any identifier: {dict(idless)}. **None is PRESENT**: a present account always carries an identifier, so it is "
+          f"* USER_PROFILE observations without any identifier: {kv(idless)}. **None is PRESENT**: a present account always carries an identifier, so it is "
           "linked by identity and its violation is already found. The accounts the timeline discovery looks for are therefore always ABSENT, and an ABSENT account "
           "is only ever a `VERIFY_RECORD_ABSENT` step (never a finding), so it cannot move a row from COMPLETE to INCOMPLETE.",
           f"* PRESENT accounts that belong to nobody in `user_identities`/audit log (their e-mails match no request either): {unlinked_present} - decoys, not requests.",
           f"* Rows with a deletion request but no account step now: **{len(no_acct)}** ({len(no_acct) - len(no_acct_real)} of them provisional rows (screenshot-only requests; "
           f"the ninth has an account step) waiting for the PNG reading; {len(no_acct_real)} real misses). Phase 2 snapshot: {P2['missing_account_rows']} rows.",
-          f"* Status of the {len(no_acct_real)} real misses: {dict(collections.Counter(res_main[c].status for c in no_acct_real))}. Status flips possible from the account: **0**; "
+          f"* Status of the {len(no_acct_real)} real misses: {kv(collections.Counter(res_main[c].status for c in no_acct_real))}. Status flips possible from the account: **0**; "
           "what is lost is one `VERIFY_RECORD_ABSENT` step per row (see section 4 for the F1 cost).", ""]
 
     cross = collections.Counter()
@@ -124,7 +125,7 @@ def main() -> int:
         for k in k1 - k0:
             added[f"{k[0]} {k[1]}"] += 1
     L += ["### (c) Does any FINDING depend on later-evidence linking?", "",
-          f"Steps that exist only because evidence captured after `audit_at` tied a resource to the user (main + samples): **{dict(added)}**; status changes caused by it: **{flips}**.",
+          f"Steps that exist only because evidence captured after `audit_at` tied a resource to the user (main + samples): **{kv(added)}**; status changes caused by it: **{flips}**.",
           "No FINDING or REMEDIATION step and no status depends on it: it only adds end-state `VERIFY_RECORD_*` steps, none of them cited. "
           "This is now enforced twice: `_audit` refuses to report a violation on a record linked only by later evidence, and "
           "`tests/test_pipeline.py::LaterEvidenceInvariant` re-runs all 550 cases with and without later linking and asserts identical statuses, findings and remediations.", ""]
@@ -153,10 +154,10 @@ def main() -> int:
           "* Elimination is exact when the true account is among the candidates; what breaks it is a candidate set that was wrongly narrowed. "
           "Cohort-snapshot narrowing, the Phase 2 default, **fails this test** (precision in the row above) and is switched off by default; "
           "when narrowing leaves a case with nothing, the case now falls back to its full candidate set.",
-          f"* Main rows by how their account was obtained: {dict(how_main)} (of {len(dele)} deletion requests). "
+          f"* Main rows by how their account was obtained: {kv(how_main)} (of {len(dele)} deletion requests). "
           f"**Rows that depend on elimination or the seconds-phase stage: {how_main['eliminated'] + how_main['phase']}** "
           f"({how_main['eliminated']} eliminated, {how_main['phase']} phase); explicit links: {how_main['explicit']}.",
-          f"* Anonymized analytics (main): {dict(how_ana)}.", ""]
+          f"* Anonymized analytics (main): {kv(how_ana)}.", ""]
 
     # ------------------------------------------------------------ 3. discovery detail
     amb = [c for c in no_acct_real if a_full.account_asg[c].how == "ambiguous"]
@@ -165,7 +166,7 @@ def main() -> int:
     a_single = analytics_holdout(a_full, 1.0 / 36, range(36))
     L += ["## 3. Discovery stages", "",
           "### Accounts (id-less, found through the activity timeline)", "",
-          f"* real misses left: {len(no_acct_real)} = {len(amb)} ambiguous (candidates per row: {dict(sorted(kdist.items()))}) + "
+          f"* real misses left: {len(no_acct_real)} = {len(amb)} ambiguous (candidates per row: {kv(sorted(kdist.items()))}) + "
           f"{len(no_acct_real) - len(amb)} with no candidate (no worker delete event for any free account in the window).",
           "* New general signals this phase (CHANGELOG rows 14-18): accounts linked to the user by a later snapshot count as the case's own when the worker deleted "
           "them in the window; a case whose preferred candidate was taken falls back to its full set; cohort narrowing off; "
@@ -186,7 +187,7 @@ def main() -> int:
           "Adding one step whose probability of being right is p raises predicted steps by 1 and true positives by p, so it improves micro-F1 only if p > F1/2 (about 49%). "
           "Assumptions, stated: step precision stays 1.0 as on the 32 samples, and each real-miss row lacks exactly one gold step (the account verification, present in all 32 labeled answers); "
           "other gold steps not reached by any record are ignored, which overstates F1 slightly.", "",
-          f"Current run: {len(amb)} ambiguous rows, candidates per row {dict(sorted(kdist.items()))}; predicted steps {P}.", "",
+          f"Current run: {len(amb)} ambiguous rows, candidates per row {kv(sorted(kdist.items()))}; predicted steps {P}.", "",
           "| choice | expected F1 | change |", "|---|---|---|"]
     L += [f"| {n} | {pct(f)} | {100 * d:+.3f} pts |" for n, f, d in eff]
     L += ["", f"Phase 2 snapshot (the question as asked: {P2['ambiguous']} ambiguous rows, {sum(P2['k'].values()) - 0} rows by k {P2['k']}; predicted steps {P2['steps']}):", "",

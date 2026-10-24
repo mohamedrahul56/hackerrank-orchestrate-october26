@@ -1,5 +1,9 @@
 # Submission checklist (prepared in Phase 1; verified item by item in Phase 5)
 
+Automatic verification of everything a program can check: `python3 code/tools/final_check.py --build-zip --expect-log-turns 6` (prints a Markdown checklist, items it cannot verify are marked NOT VERIFIED).
+
+**Exact files to upload:** `code.zip` (built by `python3 code/tools/package.py --require-final`, repository root) - `output.csv` (repository root) - `log.txt` (repository root, as the chat transcript) - `agent-trace.zip` (you export it, steps below). The AI interview uses `code/INTERVIEW_PREP.md`.
+
 ## Files to upload
 - [ ] `code.zip` - built from the repo root with `python3 code/tools/package.py --require-final` (checks every rule below first; `--dry-run` lists without writing). Must contain `README.md`, `code/` (incl. `code/evaluation/evaluation_report.md` and `code/evaluation/usage_report.md`).
 - [ ] `output.csv` - root-level, 518 data rows + header, row order = `dataset/deletion_requests.csv`, passes `auditor.validate.validate_output_file`.

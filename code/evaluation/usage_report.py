@@ -22,8 +22,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "code"))
 from auditor import prices as price_mod  # noqa: E402
+from mdfmt import kv  # noqa: E402
 
-DEFAULT_LOG = ROOT / "code" / "out" / "usage_log.jsonl"
+
+DEFAULT_LOG = ROOT / "output.usage.jsonl"          # written by main.py next to the output file it describes
 FINAL = ROOT / "code" / "evaluation" / "usage_report.md"
 PREVIEW = ROOT / "code" / "out" / "usage_report_preview.md"
 
@@ -42,17 +44,24 @@ def read_log(path: Path) -> list[dict]:
 
 
 def summarise(rows: list[dict], n_requests: int, prices: dict, price_problems: list[str], log_path: str = "") -> str:
+    info = next((r for r in rows if r.get("kind") == "run_info"), None)
+    rows = [r for r in rows if r.get("kind") != "run_info"]
     live = [r for r in rows if not r.get("cache_hit") and not r.get("error")]
     hits = [r for r in rows if r.get("cache_hit")]
     failed = [r for r in rows if r.get("error")]
     L = ["# Usage report", "",
          f"Source: the model-usage log of the final full run (`{log_path or 'AUDITOR_USAGE_LOG'}`), {n_requests} requests in `dataset/deletion_requests.csv`.",
          "Everything below is computed from that log; no figure is typed in by hand.", ""]
+    if info:
+        L += [f"* run that produced `{info['output_file']}` (sha256 `{info['output_sha256'][:16]}...`): {info['requests']} requests, status counts {kv(info['status_counts'])}, "
+              f"images read by a vision model: **{'yes' if info['images_read_by_model'] else 'no'}**, API key present in the environment: **{'yes' if info['api_key_present'] else 'no'}** (presence only)",
+              f"* provisional rows in that output ({len(info['provisional_rows'])}): {', '.join(info['provisional_rows']) or 'none'}", ""]
     if hits:
         L += [f"> **Not a cold-cache run**: the log contains {len(hits)} cache hits. Delete the cache directory and rerun before submitting this report.", ""]
     if not rows:
-        L += ["**No model calls were made in this run.** Every decision was made by deterministic code; images were not read by a model "
-              "(or the usage log is missing). Total tokens: 0.", ""]
+        L += ["**No model calls were made in this run: 0 calls, 0 input tokens, 0 output tokens.** Every decision, including every status and every step, was made by deterministic code. "
+              "The vision path (`claude-haiku-5-5`, fallback `claude-sonnet-5-5`, configured but not called) was **tested only with fakes** because no API key was available; "
+              "the screenshots were not read, which is why the rows that depend only on a screenshot are provisional.", ""]
     by_model = collections.defaultdict(lambda: collections.Counter())
     by_kind = collections.defaultdict(lambda: collections.Counter())
     for r in live:
@@ -105,12 +114,17 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--log", type=Path, default=Path(os.environ.get("AUDITOR_USAGE_LOG", DEFAULT_LOG)))
     ap.add_argument("--requests", default="deletion_requests.csv")
+    ap.add_argument("--require-run-info", action="store_true", help="fail unless the log carries the run_info row written by main.py")
     ap.add_argument("--final", action="store_true", help="write the submission file code/evaluation/usage_report.md")
     args = ap.parse_args()
     with (ROOT / "dataset" / args.requests).open(newline="", encoding="utf-8") as fh:
         n = sum(1 for _ in csv.DictReader(fh))
+    rows = read_log(args.log)
+    if args.require_run_info and not any(r.get("kind") == "run_info" for r in rows):
+        print(f"error: {args.log} has no run_info row: run `python3 code/main.py` first (it writes the log next to output.csv)", file=sys.stderr)
+        return 2
     prices, problems = price_mod.load()
-    text = summarise(read_log(args.log), n, prices, problems, str(args.log.relative_to(ROOT)) if args.log.is_relative_to(ROOT) else args.log.name)
+    text = summarise(rows, n, prices, problems, str(args.log.relative_to(ROOT)) if args.log.is_relative_to(ROOT) else args.log.name)
     out = FINAL if args.final else PREVIEW
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text, encoding="utf-8")

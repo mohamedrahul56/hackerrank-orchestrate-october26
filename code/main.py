@@ -51,12 +51,13 @@ def _run(argv: list[str] | None = None) -> int:
 
     cfg = Config(allow_later_linking=not a.no_later_linking, use_discovery=not a.no_discovery, use_cohort_filter=a.cohort_filter,
                  use_timing_heuristics=not a.no_timing_heuristics)
-    llm = None
-    if a.images == "on" or (a.images == "auto" and (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))):
+    usage_path = Path(os.environ.get("AUDITOR_USAGE_LOG") or a.out.with_suffix(".usage.jsonl"))
+    usage_path.parent.mkdir(parents=True, exist_ok=True)
+    usage_path.write_text("", encoding="utf-8")                # one log per run: evaluation/usage_report.py summarises exactly this run
+    key_present = bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))      # presence only, never the value
+    images_on = a.images == "on" or (a.images == "auto" and key_present)
+    if images_on:
         from auditor.llm import LLM
-        usage_path = Path(os.environ.get("AUDITOR_USAGE_LOG") or ROOT / "code" / "out" / "usage_log.jsonl")
-        usage_path.parent.mkdir(parents=True, exist_ok=True)
-        usage_path.write_text("", encoding="utf-8")            # one log per run: evaluation/usage_report.py summarises exactly this run
         llm = LLM(usage_path=usage_path)
         cfg.image_extractor = lambda path, system, instruction, schema, version: llm.read_image_json("image", path, system, instruction, schema, version)
     auditor = Auditor(a.dataset, cfg)
@@ -66,6 +67,11 @@ def _run(argv: list[str] | None = None) -> int:
     issues = validate_output_file(a.out, ds)
     errors = [i for i in issues if i.severity == "error"]
 
+    import hashlib
+    from auditor.llm import UsageLog
+    UsageLog(usage_path).add({"kind": "run_info", "images_read_by_model": images_on, "api_key_present": key_present, "requests": len(results), "output_file": a.out.name,
+                              "output_sha256": hashlib.sha256(a.out.read_bytes()).hexdigest(), "status_counts": dict(Counter(x.status for x in results)),
+                              "provisional_rows": [x.case_id for x in results if x.provisional]})
     notes = [f"# Run notes for {a.out.name}", "", f"cases: {len(results)}, status counts: {dict(Counter(x.status for x in results))}",
              f"evidence warnings: {len(auditor.base.warnings)}", ""]
     notes += [f"* {w}" for w in auditor.base.warnings[:50]]

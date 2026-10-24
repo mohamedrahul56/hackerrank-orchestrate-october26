@@ -28,6 +28,17 @@ class UsageReportTests(unittest.TestCase):
         text = ur.summarise([LIVE("claude-haiku-5-5", 1, 1), {"provider": "anthropic", "model": "claude-haiku-5-5", "cache_hit": True}], 2, {}, [])
         self.assertIn("Not a cold-cache run", text)
 
+    def test_run_info_row_ties_the_report_to_the_output_file_and_is_not_a_call(self):
+        info = {"kind": "run_info", "images_read_by_model": False, "api_key_present": False, "requests": 518, "output_file": "output.csv",
+                "output_sha256": "ab" * 32, "status_counts": {"COMPLETE": 1}, "provisional_rows": ["case_34"]}
+        text = ur.summarise([info], 518, {}, [])
+        self.assertIn("output.csv", text)
+        self.assertIn("images read by a vision model: **no**", text)
+        self.assertIn("API key present in the environment: **no**", text)
+        self.assertIn("case_34", text)
+        self.assertIn("0 calls, 0 input tokens, 0 output tokens", text)
+        self.assertIn("tested only with fakes", text)
+
     def test_empty_log_reports_zero_calls(self):
         text = ur.summarise([], 518, {}, [])
         self.assertIn("No model calls were made", text)

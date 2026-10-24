@@ -29,10 +29,10 @@ Phase 2 reference (same split): dev F1 97.7% (P 100%, R 95.6%), not-tuned F1 98.
 
 ### (a) Could a missing account step change `deletion_status`?
 
-* USER_PROFILE observations without any identifier: {'ABSENT': 37}. **None is PRESENT**: a present account always carries an identifier, so it is linked by identity and its violation is already found. The accounts the timeline discovery looks for are therefore always ABSENT, and an ABSENT account is only ever a `VERIFY_RECORD_ABSENT` step (never a finding), so it cannot move a row from COMPLETE to INCOMPLETE.
+* USER_PROFILE observations without any identifier: ABSENT 37. **None is PRESENT**: a present account always carries an identifier, so it is linked by identity and its violation is already found. The accounts the timeline discovery looks for are therefore always ABSENT, and an ABSENT account is only ever a `VERIFY_RECORD_ABSENT` step (never a finding), so it cannot move a row from COMPLETE to INCOMPLETE.
 * PRESENT accounts that belong to nobody in `user_identities`/audit log (their e-mails match no request either): ['account_7204', 'account_8741', 'account_9116'] - decoys, not requests.
 * Rows with a deletion request but no account step now: **35** (8 of them provisional rows (screenshot-only requests; the ninth has an account step) waiting for the PNG reading; 27 real misses). Phase 2 snapshot: 138 rows.
-* Status of the 27 real misses: {'INCOMPLETE': 8, 'COMPLETE': 19}. Status flips possible from the account: **0**; what is lost is one `VERIFY_RECORD_ABSENT` step per row (see section 4 for the F1 cost).
+* Status of the 27 real misses: COMPLETE 19, INCOMPLETE 8. Status flips possible from the account: **0**; what is lost is one `VERIFY_RECORD_ABSENT` step per row (see section 4 for the F1 cost).
 
 ### (b) Predicted status counts, main vs samples
 
@@ -57,7 +57,7 @@ Of the 10 NOT_APPLICABLE rows in the main set, 10 are requests that do not autho
 
 ### (c) Does any FINDING depend on later-evidence linking?
 
-Steps that exist only because evidence captured after `audit_at` tied a resource to the user (main + samples): **{'VERIFICATION VERIFY_RECORD_ABSENT': 85, 'VERIFICATION VERIFY_RECORD_PRESENT': 109, 'VERIFICATION VERIFY_RECORD_ANONYMIZED': 12}**; status changes caused by it: **0**.
+Steps that exist only because evidence captured after `audit_at` tied a resource to the user (main + samples): **VERIFICATION VERIFY_RECORD_ABSENT 85, VERIFICATION VERIFY_RECORD_ANONYMIZED 12, VERIFICATION VERIFY_RECORD_PRESENT 109**; status changes caused by it: **0**.
 No FINDING or REMEDIATION step and no status depends on it: it only adds end-state `VERIFY_RECORD_*` steps, none of them cited. This is now enforced twice: `_audit` refuses to report a violation on a record linked only by later evidence, and `tests/test_pipeline.py::LaterEvidenceInvariant` re-runs all 550 cases with and without later linking and asserts identical statuses, findings and remediations.
 
 ### (d) Precision of the elimination heuristic and how many main rows depend on it
@@ -75,14 +75,14 @@ Method (`evaluation/holdout.py`): cases whose account is linked explicitly (that
 Phase 2 snapshot (per-case scoring only): single leave-one-out 142/142 correct (45 more had no delete event; 2 ambiguous); 30% hidden 1152/1152 correct (528 omitted); 50% hidden 1804/1804 (1016 omitted).
 
 * Elimination is exact when the true account is among the candidates; what breaks it is a candidate set that was wrongly narrowed. Cohort-snapshot narrowing, the Phase 2 default, **fails this test** (precision in the row above) and is switched off by default; when narrowing leaves a case with nothing, the case now falls back to its full candidate set.
-* Main rows by how their account was obtained: {'none': 11, 'explicit': 239, 'eliminated': 189, 'phase': 44, 'ambiguous': 25} (of 508 deletion requests). **Rows that depend on elimination or the seconds-phase stage: 233** (189 eliminated, 44 phase); explicit links: 239.
-* Anonymized analytics (main): {'none': 306, 'chain': 33, 'ambiguous': 28, 'phase': 68}.
+* Main rows by how their account was obtained: ambiguous 25, eliminated 189, explicit 239, none 11, phase 44 (of 508 deletion requests). **Rows that depend on elimination or the seconds-phase stage: 233** (189 eliminated, 44 phase); explicit links: 239.
+* Anonymized analytics (main): ambiguous 28, chain 33, none 306, phase 68.
 
 ## 3. Discovery stages
 
 ### Accounts (id-less, found through the activity timeline)
 
-* real misses left: 27 = 25 ambiguous (candidates per row: {2: 19, 3: 6}) + 2 with no candidate (no worker delete event for any free account in the window).
+* real misses left: 27 = 25 ambiguous (candidates per row: 2 19, 3 6) + 2 with no candidate (no worker delete event for any free account in the window).
 * New general signals this phase (CHANGELOG rows 14-18): accounts linked to the user by a later snapshot count as the case's own when the worker deleted them in the window; a case whose preferred candidate was taken falls back to its full set; cohort narrowing off; **seconds-phase**: inside one case, the second-of-minute of every worker event sits at a fixed offset (per event kind) from the account-delete event, so the candidate whose offset fits the case's other events wins when it beats the runner-up by a clear margin (log-likelihood lead >= 2).
 
 ### Anonymized analytics (id-less)
@@ -98,7 +98,7 @@ Phase 2 snapshot (per-case scoring only): single leave-one-out 142/142 correct (
 
 Adding one step whose probability of being right is p raises predicted steps by 1 and true positives by p, so it improves micro-F1 only if p > F1/2 (about 49%). Assumptions, stated: step precision stays 1.0 as on the 32 samples, and each real-miss row lacks exactly one gold step (the account verification, present in all 32 labeled answers); other gold steps not reached by any record are ignored, which overstates F1 slightly.
 
-Current run: 25 ambiguous rows, candidates per row {2: 19, 3: 6}; predicted steps 3198.
+Current run: 25 ambiguous rows, candidates per row 2 19, 3 6; predicted steps 3198.
 
 | choice | expected F1 | change |
 |---|---|---|

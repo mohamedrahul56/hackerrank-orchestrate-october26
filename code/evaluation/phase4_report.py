@@ -27,6 +27,7 @@ from auditor.dataset import load_dataset  # noqa: E402
 from auditor.validate import validate_output_file  # noqa: E402
 from holdout import HEADER, account_holdout, analytics_holdout  # noqa: E402
 from phase2_report import as_rows, metrics_line, run  # noqa: E402
+from mdfmt import kv  # noqa: E402
 from score import assign_splits, read_rows  # noqa: E402
 
 D = ROOT / "dataset"
@@ -98,7 +99,7 @@ def main() -> int:
                 later[(r.status, "cited" if s["evidence_id"] else "empty evidence_id")] += 1
     L += ["## 2. Evidence ids in COMPLETE rows", "",
           f"* steps that exist only because of later-evidence linking (main + samples): **{sum(later.values())}** = " + ", ".join(f"{k[0]} row, {k[1]}: {v}" for k, v in sorted(later.items())),
-          f"* steps in COMPLETE rows (main + samples): {complete_steps}; their evidence ids: {dict(kinds)}; **COMPLETE-row steps with an empty evidence_id: {sum(complete_empty.values())}**",
+          f"* steps in COMPLETE rows (main + samples): {complete_steps}; their evidence ids: {kv(kinds)}; **COMPLETE-row steps with an empty evidence_id: {sum(complete_empty.values())}**",
           "* The 162 empty-evidence later-evidence steps are verification steps of INCOMPLETE rows, where the samples (and the spec) require `evidence_id` = \"\" (future work).",
           "* The validator already rejected an empty id in a COMPLETE row (`EVIDENCE_MISSING`), an unknown id (`EVIDENCE_UNKNOWN`) and an id captured after `audit_at` (`EVIDENCE_AFTER_AUDIT`); "
           "it is now also tested on the written CSV (`tests/test_robustness.py::CompleteRowsMustCite`) and over the real output.", ""]
@@ -188,7 +189,7 @@ def main() -> int:
                               capture_output=True, text=True)
         same_out = proc.returncode == 0 and (Path(d) / "from_zip.csv").read_bytes() == outs_bytes
     L += ["## 6. Packaging dry run (`python3 code/tools/package.py --dry-run`)", "",
-          f"* {len(files)} files, {sum(p.stat().st_size for p in files) // 1024} KiB uncompressed; by extension {dict(sorted(ext.items()))}",
+          f"* {len(files)} files, {sum(p.stat().st_size for p in files) // 1024} KiB uncompressed; by extension {kv(sorted(ext.items()))}",
           f"* violations: **{len(bad)}** {bad if bad else ''}; not yet present (Phase 5): {[n.split(': ')[1] for n in notes]}",
           f"* names in the zip starting with `dataset/`: {sum(n.startswith('dataset/') for n in names)}; nested archives: {sum(any(n.endswith(e) for e in pkg.ARCHIVE_EXT) for n in names)}; "
           f"`.env*`: {sum(n.split('/')[-1].startswith('.env') for n in names)}; `prices.json`: {sum(n.endswith('/prices.json') for n in names)}; `code/out/`: {sum(n.startswith('code/out/') for n in names)}",

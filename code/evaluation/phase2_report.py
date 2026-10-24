@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from auditor.audit import Auditor, Config  # noqa: E402
 from auditor.dataset import load_requests  # noqa: E402
 from auditor.schema import OP_RANK, PHASE_RANK  # noqa: E402
+from mdfmt import kv  # noqa: E402
 from score import Row, assign_splits, read_rows, score  # noqa: E402
 
 D = ROOT / "dataset"
@@ -134,7 +135,7 @@ def main() -> int:
     act_cites = [(c, n) for c, r in res_full.items() for n in r.notes if "ASSUMPTION: activity_id" in n]
     imgs = [w for w in a_full.base.warnings if "image" in w]
     L += ["## 3. Main set (518 requests, no labels available)", "",
-          f"* status counts: {dict(counts)} (10 of the NOT_APPLICABLE rows are real non-deletion requests; the rest are fallbacks below)",
+          f"* status counts: {kv(counts)} (10 of the NOT_APPLICABLE rows are real non-deletion requests; the rest are fallbacks below)",
           f"* deletion requests: {len(deletion)}; with an account step: {len(with_acct)}; with a retained security-audit step: {len(with_audit)}",
           f"* **conservative fallbacks (deletion request, no usable evidence): {len(fallbacks)}** -> {sorted(fallbacks)}",
           f"* image evidence not read in this run (no ANTHROPIC_API_KEY / --images off): {len(imgs)} of 11 PNGs; these fallbacks are the cases whose evidence is a PNG",

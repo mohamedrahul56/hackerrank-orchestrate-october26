@@ -396,3 +396,10 @@ Dry-run and builder with the submission rules as checks (no dataset, `.env`, cac
 ### 12.7 Still not measured
 Vision-model accuracy and variance (no key in this session: the cleared-cache rerun is covered with fakes only); the 9 provisional rows' true answers; the exposed-PII legal-hold shape; the categories without labeled samples (checked only by synthetic cases); behaviour on a different dataset instance generated with another seed.
 
+## 13. Phase 5 - final run, reports, packaging
+
+* **Key step skipped.** `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` were absent from the environment (presence checked, values never printed) and `code/config/prices.json` does not exist, so `show_image_readings.py` and the model run were not executed. Consequences, stated in every report: the 11 readings could not be compared with what the code expects; the 9 provisional rows could not change; no model nondeterminism could be measured (cleared-cache rerun); the final run made 0 model calls and used 0 tokens. The retry / cache / refusal / injection logic is covered by tests with a fake client only.
+* **What was done instead.** The deterministic final run (`python3 code/main.py`) produced `output.csv` (COMPLETE 152, INCOMPLETE 356, NOT_APPLICABLE 10, validator errors 0); two further runs in the evaluation report are byte-identical to it. `usage_report.md` is generated from the run's own log (`output.usage.jsonl`, with the output file's sha256).
+* **Row order.** `output.csv` follows `deletion_requests.csv` (decision D4), which is also the numeric order of the case ids; `AGENTS.md` says "sort rows by case_id" and a plain string sort would put `case_100` before `case_33`. The sample answers use numeric order too. If the grader keys on `case_id` (almost certainly) order is irrelevant; the choice is flagged in the final checklist.
+* Documents: `README.md` (rewritten), `code/INTERVIEW_PREP.md`, `code/evaluation/evaluation_report.md`, `code/evaluation/usage_report.md`; checks: `python3 code/tools/final_check.py --build-zip --expect-log-turns 6`.
+

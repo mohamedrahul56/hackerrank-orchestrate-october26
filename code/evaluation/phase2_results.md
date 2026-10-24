@@ -36,7 +36,7 @@ Account discovery on all 32 samples (precision of what it assigns): eliminated/c
 
 ## 3. Main set (518 requests, no labels available)
 
-* status counts: {'INCOMPLETE': 356, 'COMPLETE': 152, 'NOT_APPLICABLE': 10} (10 of the NOT_APPLICABLE rows are real non-deletion requests; the rest are fallbacks below)
+* status counts: COMPLETE 152, INCOMPLETE 356, NOT_APPLICABLE 10 (10 of the NOT_APPLICABLE rows are real non-deletion requests; the rest are fallbacks below)
 * deletion requests: 508; with an account step: 473; with a retained security-audit step: 403
 * **conservative fallbacks (deletion request, no usable evidence): 0** -> []
 * image evidence not read in this run (no ANTHROPIC_API_KEY / --images off): 11 of 11 PNGs; these fallbacks are the cases whose evidence is a PNG

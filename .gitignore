@@ -10,3 +10,4 @@ code/out/
 code/config/prices.json
 agent-trace/
 agent-trace.zip
+*.usage.jsonl
