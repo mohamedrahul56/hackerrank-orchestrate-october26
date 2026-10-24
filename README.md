@@ -21,6 +21,7 @@ Tested on Python 3.13. Reading is limited to `dataset/`; nothing else is read. T
 |---|---|
 | `--requests sample_deletion_requests.csv --out code/out/pred_samples.csv` | run the 32 labeled samples |
 | `--images auto` (default) / `on` / `off` | read the PNG evidence with a vision model; `auto` = only when `ANTHROPIC_API_KEY` is set |
+| `--explain CASE_ID` | print how that one case got its answer (identity, evidence per resource with the one used, the rule, why each step exists or is left out) and exit; read-only: writes no `output.csv`, notes or usage log; screenshots are read only with `--images on` |
 | `--no-timing-heuristics` | switch off the two second-of-minute heuristics (see "Known weaknesses") |
 | `--no-discovery`, `--no-later-linking` | ablations |
 
@@ -30,6 +31,7 @@ Other commands (all from the repository root):
 python3 code/evaluation/main.py                     # run the samples and print the score report
 python3 -m unittest discover -s code/tests -t code  # the test suite (needs no key; dataset-dependent tests skip without dataset/)
 python3 code/evaluation/evaluation_report.py        # regenerate code/evaluation/evaluation_report.md
+python3 code/tools/determinism_check.py             # 27 runs under different hash seeds / directories / locales; output files must be byte-identical
 python3 code/tools/package.py --dry-run             # check and list what code.zip would contain; without --dry-run it writes code.zip
 ```
 

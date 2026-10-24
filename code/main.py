@@ -33,6 +33,24 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
 
+def _explain(a, cfg) -> int:
+    """--explain: build the auditor exactly as a normal run does, print the explanation, write nothing (no output.csv, notes or usage log)."""
+    from auditor.explain import explain
+    if a.images == "on":
+        import tempfile
+        from auditor.llm import LLM
+        llm = LLM(usage_path=Path(tempfile.mkdtemp()) / "explain_usage.jsonl")          # the usage of an explanation is not part of any run's log
+        cfg.image_extractor = lambda path, system, instruction, schema, version: llm.read_image_json("image", path, system, instruction, schema, version)
+    auditor = Auditor(a.dataset, cfg)
+    try:
+        sys.stdout.write(explain(auditor, a.explain))
+    except KeyError:
+        known = sorted(auditor.requests, key=lambda c: (len(c), c))
+        print(f"error: no case {a.explain!r} in the request files (e.g. {', '.join(known[:3])} ... {known[-1]})", file=sys.stderr)
+        return 2
+    return 0
+
+
 def _run(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dataset", type=Path, default=ROOT / "dataset")
@@ -45,12 +63,16 @@ def _run(argv: list[str] | None = None) -> int:
     ap.add_argument("--cohort-filter", action="store_true", help="ablation only: narrow ambiguous accounts by cohort snapshot (measured harmful, off by default)")
     ap.add_argument("--images", choices=["auto", "on", "off"], default="auto",
                     help="read the PNG evidence with a vision model (needs ANTHROPIC_API_KEY); auto = only when a key is set")
+    ap.add_argument("--explain", metavar="CASE_ID", help="print how this one case got its answer (identity, evidence, rule, why each step exists or is omitted) and exit; "
+                    "read-only: writes no output file, notes or usage log; screenshots are read only with --images on")
     ap.add_argument("-v", "--verbose", action="store_true")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO if a.verbose else logging.WARNING, format="%(levelname)s %(message)s")
 
     cfg = Config(allow_later_linking=not a.no_later_linking, use_discovery=not a.no_discovery, use_cohort_filter=a.cohort_filter,
                  use_timing_heuristics=not a.no_timing_heuristics)
+    if a.explain:
+        return _explain(a, cfg)
     usage_path = Path(os.environ.get("AUDITOR_USAGE_LOG") or a.out.with_suffix(".usage.jsonl"))
     usage_path.parent.mkdir(parents=True, exist_ok=True)
     usage_path.write_text("", encoding="utf-8")                # one log per run: evaluation/usage_report.py summarises exactly this run

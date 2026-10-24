@@ -349,3 +349,44 @@ branch=claude/exciting-lamport-yrcfpx
 repo_root=/home/user/hackerrank-orchestrate-october26
 worktree=main
 parent_agent=none
+
+## [2026-10-24T18:23:02Z] --explain CASE_ID
+
+User Prompt (verbatim, secrets redacted):
+Add a --explain CASE_ID option that prints, for that case, the identity resolution, each resource's state at audit_at with the evidence cited, the rule applied, and why each step was emitted or omitted. Read-only; it must not change output.csv. Add tests on three cases of different kinds.
+
+Agent Response Summary:
+Added main.py --explain CASE_ID backed by auditor/explain.py and an optional Trace filled by the real case audit at each decision point, so the explanation cannot drift from the answer. It prints the request, classification, identity resolution, resources and how they were found, every observation per resource with the one used marked, the rule (id, condition, action) and verdict, each step with its reason and citation, and what was omitted and why. It writes nothing (no output, notes or usage log). 14 tests (synthetic cases plus three real kinds of case, a read-only mutation check); output.csv byte-identical; 175 tests pass.
+
+Actions:
+* Added code/auditor/explain.py, code/auditor/trace.py, code/tests/test_explain.py; instrumented Auditor._audit and PolicyEngine (rule ids); added --explain to code/main.py
+* Updated README, NOTES (section 14), CHANGELOG (row 34), INTERVIEW_PREP test count; regenerated reports; rebuilt code.zip and ran final_check.py; committed and pushed
+
+Context:
+tool=Claude Code
+model=claude-sonnet-5-5
+branch=claude/exciting-lamport-yrcfpx
+repo_root=/home/user/hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none
+
+## [2026-10-24T20:03:34Z] Determinism across hash seeds, working directories and locales
+
+User Prompt (verbatim, secrets redacted):
+Run the full pipeline under three different PYTHONHASHSEED values and a different working directory and locale; compare output.csv and output.notes.md hashes. Fix any unstable ordering with explicit sorting, add a test that runs this check, and report before/after.
+(a mid-turn follow-up from the user said: "Try again")
+
+Agent Response Summary:
+Built code/tools/determinism_check.py (27 runs: 3 hash seeds x 3 working directories x 3 locale/encoding/timezone settings) and ran it on the committed code and on the fixed code. Before: output.csv and the usage log had 1 hash, output.notes.md had 3 (later-evidence lines in hash-seed order). Fixed with explicit sorting; after: 1 hash for every file, also over 19 more seeds. Added tests/test_determinism.py (real pipeline quick matrix that fails on the old code, plus a fake program leaking each factor that the checker must flag).
+
+Actions:
+* Added code/tools/determinism_check.py and code/tests/test_determinism.py; sorted resources and the later-evidence list in code/auditor/audit.py
+* Regenerated output.notes.md and the reports; updated CHANGELOG (row 36), NOTES (section 15), README, INTERVIEW_PREP; committed and pushed
+
+Context:
+tool=Claude Code
+model=claude-sonnet-5-5
+branch=claude/exciting-lamport-yrcfpx
+repo_root=/home/user/hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none

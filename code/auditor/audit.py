@@ -30,6 +30,7 @@ from .link import Linker
 from .policy import PolicyEngine
 from .schema import canonicalize, make_step
 from .state import ResourceState, resolve, usable
+from .trace import Trace
 from .validate import validate_case
 
 log = logging.getLogger("auditor")
@@ -172,7 +173,8 @@ class Auditor:
             log.exception("case %s failed, falling back to a conservative row", case_id)
             return CaseResult(case_id, "NOT_APPLICABLE", [], [f"FALLBACK: {type(e).__name__}: {e}"])
 
-    def _audit(self, case_id: str) -> CaseResult:
+    def _audit(self, case_id: str, trace: Trace | None = None) -> CaseResult:
+        tr = trace if trace is not None else Trace()           # a throw-away trace in normal runs: the same code path, nothing read from it
         r = self.requests[case_id]
         cls = self.classification[case_id]
         if cls.label != DELETION:
@@ -186,7 +188,7 @@ class Auditor:
 
         # ---- resources of this case
         resources: dict[str, str] = {}                           # resource -> how it was found
-        for rid in self.link.resources_of(users):
+        for rid in sorted(self.link.resources_of(users)):                 # sorted: set order depends on the process hash seed
             first = self.link.first_link_time(rid, users)
             if first is not None and first[0] > audit_at:
                 if not self.cfg.allow_later_linking:
@@ -207,6 +209,8 @@ class Auditor:
         if ana and ana.resource and ana.resource not in resources:
             resources[ana.resource] = f"analytics-{ana.how}"
             activity_for[ana.resource] = ana.event
+        later.sort()                                              # explicit order for the later-evidence log, whatever order the links were found in
+        tr.resources, tr.later = dict(resources), list(later)
 
         # ---- state at audit_at
         states: dict[str, ResourceState] = {}
@@ -218,20 +222,27 @@ class Auditor:
         steps: list[dict] = []
         violations = []
         compliant = []
+        tr.states = dict(states)
         for rid, st in states.items():
             if st.until is not None and st.until <= audit_at:
                 notes.append(f"{rid}: retention/hold ended {st.until:%Y-%m-%dT%H:%M:%SZ} (before audit_at): no retain requirement, no step")
+                tr.omitted.append((rid, f"its retention / legal hold ended {st.until:%Y-%m-%dT%H:%M:%SZ}, before audit_at: the RETAIN rule no longer applies, so nothing is required of it"))
                 continue
             v = self.policy.judge(st.category, st.state)
             if v is None:
                 notes.append(f"{rid}: state {st.state} for {st.category} says nothing about policy; ignored")
+                tr.omitted.append((rid, f"state {st.state} says nothing about policy for {st.category}"))
                 continue
+            tr.verdicts[rid] = self._verdict_sentence(st, v)
             if v.violation and rid in later_rids:
                 # a finding must stand on evidence available at audit_at; a record tied to the user only by a later snapshot may
                 # support an end-state check, never a finding or a remediation (decision D3). Measured: this never fires today.
                 notes.append(f"{rid}: violation not reported - the record is linked to the user only by evidence captured after audit_at")
+                tr.omitted.append((rid, "it violates policy but is tied to the user only by evidence captured after audit_at (decision D3): no finding or remediation"))
                 continue
             (violations if v.violation else compliant).append((st, v))
+            if not v.violation and not v.emit_verification:
+                tr.omitted.append((rid, f"already compliant ({st.state}) and a compliant {st.category} copy adds no step (only the account is always verified)"))
         # accounts with no state evidence in the window: discovered through the activity stream, or linked explicitly by a
         # later snapshot of this same scenario (first seen between the request and a week after audit_at)
         unobserved_accounts = []
@@ -256,25 +267,34 @@ class Auditor:
         status = "INCOMPLETE" if violations else "COMPLETE"
         cite_ok = status == "COMPLETE"
         for st, v in violations:
-            steps.append(make_step("FINDING", v.treatment.finding, st.system, st.resource, st.file_id))
-            steps.append(make_step("REMEDIATION", v.treatment.fix, st.system, st.resource))
-            steps.append(make_step("VERIFICATION", v.treatment.verify, st.system, st.resource))
+            steps.append(tr.why(make_step("FINDING", v.treatment.finding, st.system, st.resource, st.file_id),
+                                f"{st.resource} is {st.state} at audit_at ({tr.verdicts[st.resource]}); cites {st.file_id}, the latest in-window file that shows it"))
+            steps.append(tr.why(make_step("REMEDIATION", v.treatment.fix, st.system, st.resource), "proposed fix for the finding above (future work, so no evidence id)"))
+            steps.append(tr.why(make_step("VERIFICATION", v.treatment.verify, st.system, st.resource), "check that must pass after the fix (future work, so no evidence id)"))
         for st, v in compliant:
             if v.emit_verification:
-                steps.append(make_step("VERIFICATION", v.treatment.verify, st.system, st.resource, st.file_id if cite_ok else ""))
+                steps.append(tr.why(make_step("VERIFICATION", v.treatment.verify, st.system, st.resource, st.file_id if cite_ok else ""),
+                                    f"{st.resource} already has the required treatment ({st.state}; {tr.verdicts[st.resource]})"
+                                    + (f"; cites {st.file_id}, the evidence that proves it" if cite_ok else "; the row is INCOMPLETE, so verification steps are future work with no evidence id")))
         if not cite_ok:
             for rid, o in unobserved_linked:
                 v = self.policy.judge(o.category, sorted(self.policy.treatment_for(o.category).ok)[0])
                 if v is not None and v.emit_verification:
-                    steps.append(make_step("VERIFICATION", v.treatment.verify, o.system, rid, ""))
+                    steps.append(tr.why(make_step("VERIFICATION", v.treatment.verify, o.system, rid, ""),
+                                        f"{rid} is tied to the user and first appears in {o.file_id} (a later snapshot of the same scenario): its required end state is still a check, with no citation"))
                     notes.append(f"{rid}: no state evidence in the window; end-state check added from its later/linked observation ({o.file_id})")
+        elif unobserved_linked:
+            for rid, o in unobserved_linked:
+                tr.omitted.append((rid, f"tied to the user but no evidence captured inside the window shows it, and in a COMPLETE row every step must cite evidence: no step"))
         for rid in unobserved_accounts:                          # account known only from the activity stream
             ev = activity_for.get(rid)
             cite = ""
             if cite_ok:
                 cite, how = self._cite_unobserved("account_service", r, states, ev)
                 notes.append(f"{rid}: no observation in window; cited {cite!r} ({how})")
-            steps.append(make_step("VERIFICATION", "VERIFY_RECORD_ABSENT", "account_service", rid, cite))
+            steps.append(tr.why(make_step("VERIFICATION", "VERIFY_RECORD_ABSENT", "account_service", rid, cite),
+                                f"{rid} is the user's account ({resources.get(rid)}); no file shows it inside the window, so it is treated as deleted (claim from the worker's delete event)"
+                                + (f"; cites {cite} ({how})" if cite_ok else "; the row is INCOMPLETE, so no evidence id")))
         provisional = False
         if not steps:
             prov = self._provisional(r, users) if self.cfg.provisional_rows else None
@@ -282,11 +302,20 @@ class Auditor:
                 return CaseResult(case_id, "NOT_APPLICABLE", [], ["FALLBACK: deletion request but no evidence-backed resource in the request window"], later)
             steps, status, provisional = prov[0], "INCOMPLETE", True
             notes.append("PROVISIONAL: " + prov[1])
+            for s_ in steps:
+                tr.why(s_, "PROVISIONAL - " + prov[1])
         steps = canonicalize(steps)
         issues = [i for i in validate_case(case_id, status, steps) if i.severity == "error"]
         if issues:
             return CaseResult(case_id, "NOT_APPLICABLE", [], [f"FALLBACK: validator rejected row: {issues[0]}"], later)
         return CaseResult(case_id, status, steps, notes, later, provisional)
+
+    def _verdict_sentence(self, st: ResourceState, v) -> str:
+        rid = self.policy.rule_ids.get(st.category, "")
+        action, cond = self.policy.rules.get(st.category, ("DISABLE_FLOW", "spec 6.5: an active data flow can recreate the data (not a row of deletion_rules.csv)"))
+        rule = f"{rid} {st.category} / {cond} / {action}".strip() if rid else f"{st.category}: {cond}"
+        outcome = "VIOLATION" if v.violation else "compliant"
+        return f"{rule}; state {st.state} -> {outcome} (treatment {v.action})"
 
     # ------------------------------------------------------------------ provisional row for an unread screenshot
     def _provisional(self, r: Request, users: set[str]) -> tuple[list[dict], str] | None:

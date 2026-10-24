@@ -58,9 +58,11 @@ class Verdict:
 class PolicyEngine:
     def __init__(self, rules_csv: Path):
         self.rules: dict[str, tuple[str, str]] = {}
+        self.rule_ids: dict[str, str] = {}                       # category -> rule_id (for explanations)
         with rules_csv.open(newline="", encoding="utf-8") as fh:
             for r in csv.DictReader(fh):
                 self.rules[r["data_category"]] = (r["required_action"].strip().upper(), r["condition"])
+                self.rule_ids[r["data_category"]] = r.get("rule_id", "")
 
     def action_for(self, category: str) -> str:
         if category == "DATA_FLOW":
