@@ -6,3 +6,4 @@ venv/
 node_modules/
 code.zip
 code/.cache/
+code/out/

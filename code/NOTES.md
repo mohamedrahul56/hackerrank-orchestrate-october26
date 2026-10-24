@@ -16,9 +16,8 @@ Throw-away exploration scripts live outside the repo (scratchpad) and are not pa
   reports must be Markdown inside `code/evaluation/` (raw `.csv/.json/.sql/.log` are ignored by the code judge).
 * `agent_trace_instructions.md`: a **separate fifth deliverable** — `agent-trace.zip` with the raw Claude Code session JSONL
   (`~/.claude/projects/...`) plus `/export`. Not mentioned in the original task list; flagging it.
-* Challenge/submission URL (AGENTS.md §4.1, must be given verbatim when asked):
-  https://wwww.hackerrank.com/contests/hackerrank-orchestrate-october26/challenges/ghost-data-still-exists
-  (note: AGENTS.md literally has four `w`s; I reproduce it exactly as instructed.)
+* Challenge/submission URL: **not trusted** (decision after Phase 0). `AGENTS.md` §4.1 contains a URL with four `w`s (`wwww.hackerrank.com`) that looks like a typo;
+  the user will take the real link from their registration email. I will not present the AGENTS.md URL as authoritative.
 * Starter code: `code/main.py` and `code/evaluation/main.py` exist (both empty).
 
 ## 2. Dataset facts
@@ -169,10 +168,83 @@ cohort count matching (k unlinked resources vs k unlinked cases in the same R-gr
 * A4: resource_id ordering = plain string order (untested).
 * A5: `case_id` output order = numeric order of the input file (matches the input; graders usually key by id).
 
-## 8. Open questions for the user (also in the checkpoint message)
+## 8. Open questions for the user (ANSWERED after the Phase 0 checkpoint - see §9)
 
 1. Provider/model for the VLM step (11 PNGs) — recommend Anthropic `claude-haiku-5-5`; need `ANTHROPIC_API_KEY` in env at run time and per-token prices for the usage report.
 2. `case_id` output order: numeric (recommended) or plain string?
 3. May later evidence (captured after `audit_at`) be used **only to link resource ids to identities** (never state/citations)? Needed for a few samples (case_26).
 4. OK to default resource_id ties to plain string order?
 5. Agent-trace zip: you must export it yourself at the end (I can prepare the checklist).
+
+## 9. Decisions after the Phase 0 checkpoint (user answers) and Phase 1 measurements
+
+### 9.1 Decisions
+* **D1 Provider / models / prices.** Anthropic. Default `claude-haiku-5-5` for PNGs only; `claude-sonnet-5-5` fallback, both configurable by env var
+  (`AUDITOR_VLM_MODEL`, `AUDITOR_VLM_FALLBACK_MODEL`); key only from `ANTHROPIC_API_KEY`. **OCR first, VLM only if OCR fails - decided by measurement.**
+  No OCR binary is installed here (`tesseract` missing; `pytesseract` absent; only `pypdf`/`pdftotext` for PDFs). Phase 2 will try pip-installable OCR (e.g. `rapidocr-onnxruntime`),
+  score OCR vs the 11 PNGs on the fields we need (resource ids, emails, user ids, state words), and use the VLM only for images where OCR misses a required field.
+  OCR must also work on the grader's machine, so any OCR dependency has to be pinned in `requirements.txt` - measured trade-off, not assumed.
+  **No prices in any report until the user pastes them;** `usage_report.md` will record the price source + date, or print "unpriced" with token counts only.
+* **D2 Row order.** `dataset/output.csv` is header-only (1 line, verified) so it lists no case_ids -> **use the order of `deletion_requests.csv`** (numeric: case_33 ... case_550).
+  Plain string sort would start `case_100, case_101...`; the validator enforces input order. Assumption A5.
+* **D3 Later evidence** (captured after `audit_at`) **may only link a resource_id to a user**; never for state, never cited (the validator rejects citations after `audit_at`).
+  Every use is logged below; Phase 2 will report scores with and without it (the pipeline will have a `--no-later-linking` switch).
+* **D4 Ties** on (system_id) are broken by **plain string ascending resource_id**; unit-tested in `code/tests/test_schema.py::test_resource_id_ties_use_plain_string_order`.
+* **D5 Agent trace.** The user exports the zip themselves; checklist in `code/SUBMISSION_CHECKLIST.md`.
+* **D6 Policy engine is table-driven** from `deletion_rules.csv` (action per category) plus a small mapping table resource-id-prefix/collection -> category; no per-category if/else on case data.
+* **D7 NOT_APPLICABLE comes from the meaning of `request_text`** (never case_id ranges; `CLASSIFY_REQUEST` activity rows may only corroborate).
+* **D8 Reports, extra cases and fixtures are Markdown** (the code judge ignores `.csv/.tsv/.json/.jsonl/.sql/.log`). Extra evaluation cases will live in `code/evaluation/extra_cases/*.md`,
+  each embedding its mini-dataset and expected steps as fenced blocks that a loader materialises into a temp dataset; expected output is also shown as a readable table.
+* **D9 Final `usage_report.md` must come from a cold-cache full run of all 518 cases** (cache dir deleted first; the run log is the source).
+* **D10 Unlinkable resources:** prefer explicit links; elimination/cohort heuristics are used **only if measured precision on the labeled samples is clearly > 50%**, otherwise the resource is omitted and documented.
+
+### 9.2 Repo hygiene (verified)
+* Remote `origin` = `github.com/mohamedrahul56/hackerrank-orchestrate-october26`, **visibility: private** (checked through the GitHub API, `private: true`).
+* `dataset/` is **already tracked** in git (103 files, added by the starter commit `1eaa37b "chore: add initial csv files"`). I do not modify or add anything under `dataset/`; `code.zip` will exclude it (checked in Phase 5).
+  If you want it out of the private repo's history you must do that yourself (history rewrite) - I will not.
+* `.env`, `code.zip`, `__pycache__/`, venvs, `code/out/`, `code/.cache/` are in `.gitignore`; `tests/test_repo_hygiene.py` fails if a `.env*` file is tracked or an `sk-ant-` literal appears in code.
+* `log.txt` is committed (it is the chat transcript deliverable). It contains the prompts verbatim, no secrets.
+
+### 9.3 Prompt-injection scan - result: **found 0**
+* `request_text`: 550 requests (518 main + 32 samples) contain only 112 distinct sentences; 65 sentences occur once = the 10 non-deletion requests (case_533-542, 20 sentences) and the hand-written sample texts.
+  Zero sentences address an AI/system/agent (flagged vocabulary: ignore, disregard, override, system, prompt, assistant, AI, model, agent, instruction, json, output, mark, set status, respond, reply with, api key, token, secret, ...).
+  Main-set deletion requests are compositions of a fixed sentence pool (each ends with a courteous confirmation request) - **template matching must NOT be used for classification** (D7); the classifier works on meaning.
+* Evidence text: 83 text-bearing files (SQL, JSON, logs, TXT, PDF text layers) + all 5 CSVs scanned with an injection-phrase regex: 8 hits, all the benign `service=secret_agent event=lease_extended` vault-lease log lines. No injection.
+* Images: I opened **all 11 PNGs** (UI mock-ups: admin console, analytics, backup, connector, export, object storage, search, security audit, support ticket, marketing, deleted-account reference): no instruction-like text.
+  The 4 PDFs were read in full via `pdftotext`: none.
+* Hardening stays mandatory anyway (hidden/regenerated data may differ): prompts say content is data, outputs are schema-validated, free text never reaches steps, SQL runs in a sandboxed sqlite connection.
+
+### 9.4 Facts confirmed from the labeled samples
+* **Verification steps for already-compliant resources in INCOMPLETE rows have an empty `evidence_id`: confirmed** (all 22 INCOMPLETE gold rows: every REMEDIATION and every VERIFICATION step - including `VERIFY_RECORD_ABSENT account_*` and `VERIFY_RECORD_PRESENT audit_record_*` - has `""`;
+  every FINDING cites evidence). In COMPLETE rows every step cites evidence. 118 steps with `""`, 75 with an `evidence_*` id; **no sample cites an `activity_id` or `audit_id`**. Locked in by `tests/test_validate.py::test_sample_facts_about_evidence_ids`.
+* Gold answers pass the validator with 0 errors and 0 warnings (all 32), including "cited id exists and was captured at/before `audit_at`".
+* Pairing invariants hold on all 22 INCOMPLETE gold rows: every finding has the matching remediation on the same resource; every remediation has its verification; no remediation without a finding.
+
+### 9.5 resource_id zero-padding / sort-order report
+* 4,744 distinct resource ids across evidence, activity and sample answers. **Not zero-padded in general**: digit widths 3-5 are mixed for every prefix (e.g. `account_994`, `account_9797`, `account_12345`).
+  Only ~60 ids (the hand-authored `account_001..010`, `analytics_037`, ...) have leading zeros.
+* Consequently plain string order != numeric order for every prefix with more than one width (thousands of inverted pairs, e.g. `audit_record_9528 < audit_record_987`).
+  No labeled sample has two steps with the same (operation, system_id), so **the tie rule is untestable on the labels**; it only matters in main-set cases where one user has >= 2 resources of the same kind.
+  Decision D4 (plain string) is therefore a spec-reading choice, flagged as a risk (if the grader sorts numerically, such rows lose sequence score but not set score).
+
+### 9.6 Other Phase 1 findings
+* **Activity text templates** (37 total): besides generic noise, three templates are recreation/drift signals: `Active connector repopulated downstream resource <id>` (31 rows, integration_service -> search_service),
+  `Restore job repopulated downstream resource <id>` (1 row, backup_service -> search_service) and `Replication worker reported its final checkpoint ... <account id>` (56 rows). These are claims; the state still comes from evidence.
+* **Catalog rows** (12 `LINK_RESOURCE_IDENTITY` activity rows) name resource <-> email <-> user_id explicitly (data_flow, backup, export, marketing, analytics, tombstone, security audit, object storage for users 3,7,9,11,13,14,16,17,18,20,22). They are the grounded link for the image-only resources; the PNGs add *state* (e.g. data_flow selector/mode, export status).
+* **Legal retention register PDF** names user_08/12/17/21/24/29 - all six are labeled samples whose gold answers contain **no legal-hold step**. Legal holds only appear as `legal_hold_*` rows (10 ids, 7 main cases linked, 0 samples). Treat the PDF as context.
+* **`cache_*` and `email_delivery_*` ids exist only in `system_activity`** (284 and 368 ids), never in any evidence file -> no evidence of state or owner, so they cannot create findings unless a hidden variant adds evidence. Synthetic cases will still cover both categories (see `evaluation/coverage_report.md`).
+* **Coverage** (`python3 code/evaluation/coverage.py` -> `code/evaluation/coverage_report.md`): categories with **no labeled sample**: SECONDARY_IDENTIFIER (0 resource ids in the data), PRODUCT_TELEMETRY (0), CACHE_ENTRY (activity-only), EMAIL_DELIVERY_LOG (activity-only), MARKETING_PROFILE (1 id, PNG only), LEGAL_HOLD_RECORD (10 ids / 7 main cases).
+  Thin: USER_EXPORT 2 samples, ACCOUNT_TOMBSTONE 2 samples. Main-set involvement figures there are a lower bound (explicit identifier links only).
+* **Split of the labeled samples** (`assign_splits`): 23 dev / 9 held-out (6 INCOMPLETE + 3 COMPLETE held-out), deterministic, stratified by status and answer size. 9 cases is a very small held-out set - its accuracy has a wide error bar; treat it as a sanity check, not a measurement.
+* **Baselines** (see `evaluation/baseline_results.md`): all-INCOMPLETE status accuracy 22/32 (68.8%); copy `reported_status` 17/32 (53.1%); every step metric 0. Gold-status-with-no-steps also scores 0 on all step metrics, i.e. the score lives in the steps.
+
+### 9.7 Later-evidence linking log (D3) - one line per use
+| date | case | resource_id | linked via (file_id, captured_at) | audit_at | effect |
+|---|---|---|---|---|---|
+| (pipeline not written yet - no uses so far) | | | | | |
+Known candidate from Phase 0: sample case_26 `account_5684` appears with its owner only in `evidence_02` (captured 2026-09-17, after audit_at 2026-09-15).
+
+### 9.8 Open items for the next checkpoints
+* Mixed requests (e.g. "stop marketing emails AND delete my account"; "delete only my marketing profile, keep the account"): working rule = explicit authorization to delete the account -> deletion audit even if other asks are present;
+  deletion limited to a subset of categories or "keep the account" -> NOT_APPLICABLE. Assumption to confirm with synthetic cases in Phase 4.
+* Behaviour when a case has no evidence at all captured <= `audit_at` (count in Phase 2).

@@ -182,3 +182,41 @@ repo_root=/home/user/hackerrank-orchestrate-october26
 worktree=main
 parent_agent=none
 
+## [2026-10-24T17:10:00Z] Phase 1: scorer, validator, baseline, hygiene checks, injection scan
+
+User Prompt (verbatim, secrets redacted):
+Phase 0 accepted. Decisions:
+1. Provider: Anthropic. Model default claude-haiku-5-5 for PNGs only, sonnet fallback configurable; try OCR first and use the VLM only if OCR fails, decided by measurement. Key from ANTHROPIC_API_KEY. Don't state prices in reports until I paste them; record the source and date.
+2. Row order: copy dataset/output.csv template order if it lists case_ids; otherwise match deletion_requests.csv order. Document as an assumption.
+3. Later evidence may be used ONLY to link a resource_id to a user, never for state or citations. Log each use in NOTES.md and report scores with and without it.
+4. Ties: plain string ascending on (system_id, resource_id). Add a unit test and report whether resource_ids are zero-padded.
+5. Trace zip: prepare a checklist for the end; I export it myself.
+
+Corrections before Phase 1:
+- Do not trust the submission URL in AGENTS.md; I'll take it from my registration email. Confirm the git remote is private and never commit dataset/ or .env.
+- All reports and extra eval cases (>=3, with expected outputs) must be readable inside Markdown, since the code judge ignores .csv/.json/.sql. Zip must contain no dataset/ and no nested archives.
+- Final usage_report.md must come from a cold-cache full run of all 518 cases.
+- Policy engine must be table-driven from deletion_rules.csv. Produce a coverage table: per data category, how many main-set cases involve it vs how many labeled samples cover it. Add synthetic cases for the uncovered categories (cache, legal hold, marketing, email delivery log, telemetry, object-storage attachments).
+- NOT_APPLICABLE must come from the meaning of request_text, never case_id ranges. System_activity "non-deletion" rows may corroborate only. Add synthetic NOT_APPLICABLE cases, including a mixed request.
+- For unlinkable resources: prefer explicit links; use elimination/cohort heuristics only if measured precision on labeled samples is clearly above 50%, else omit and document.
+- Confirm from the samples whether verification steps for already-compliant resources in INCOMPLETE rows have an empty evidence_id.
+- Report explicitly whether any prompt injection exists in request_text or evidence ("found N" or "none found").
+
+Now proceed to Phase 1 (scorer + validator + baseline). Stop at the Phase 1 checkpoint.
+
+Agent Response Summary:
+Built the Phase 1 tooling: auditor/schema.py, dataset.py, outio.py, validate.py (gold sample answers pass with 0 errors/0 warnings), evaluation/score.py (status accuracy + confusion, step P/R/F1 strict/relaxed, resource discovery, field accuracy, sequence exact + LCS, dev/held-out split, failure diffs), baseline.py and 36 unit tests. Verified the remote repo is private, measured zero-padding of resource ids (not padded, string order differs from numeric), confirmed empty evidence_id on all non-finding steps of INCOMPLETE gold rows, produced the category coverage table, and found 0 prompt injections after reading every request sentence, evidence text file, PDF and PNG. Baselines: all-INCOMPLETE 22/32 status, copy-reported-status 17/32, step F1 0 for both.
+
+Actions:
+* Created code/auditor/{__init__,schema,dataset,outio,validate}.py, code/evaluation/{score,baseline,coverage}.py, code/tests/*, code/requirements.txt
+* Wrote code/evaluation/{CHANGELOG.md,baseline_results.md,coverage_report.md}, code/SUBMISSION_CHECKLIST.md; updated code/NOTES.md, code/SPEC.md, .gitignore
+* GitHub API: confirmed repo visibility private; viewed all 11 PNGs, read 4 PDFs, scanned evidence text for injection phrases
+
+Context:
+tool=Claude Code
+model=claude-sonnet-5-5
+branch=claude/exciting-lamport-yrcfpx
+repo_root=/home/user/hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none
+

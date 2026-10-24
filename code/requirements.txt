@@ -1,0 +1,2 @@
+# Phase 1 has no third-party dependencies (stdlib only; tests use unittest).
+# Phase 2 will add a pinned `anthropic==<version>` line for the image step.

@@ -73,8 +73,8 @@ For each resource: among observations with `captured_at <= audit_at` take the **
 ## 8. Ambiguities / assumptions (see NOTES.md §6-8)
 
 1. Linking deleted accounts and fully anonymized analytics records (no identifier anywhere) to a case.
-2. Use of post-`audit_at` evidence for identity linking only.
-3. resource_id sort (string vs natural) and case_id output order (numeric vs string).
+2. ~~Use of post-`audit_at` evidence for identity linking only~~ - RESOLVED (NOTES D3): allowed for linking only, logged, scored with/without.
+3. ~~resource_id sort / case_id order~~ - RESOLVED (NOTES D2, D4): plain string resource_id; input-file order for rows.
 4. Behaviour when a case has no evidence at all ≤ `audit_at`.
 5. Categories absent from samples (cache, legal hold, marketing, email log, telemetry, attachments in object storage).
 6. Citation choice when several files observe the same resource at different times.
