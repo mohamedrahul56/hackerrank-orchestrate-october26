@@ -12,9 +12,10 @@ Two rows need a note:
 """
 from __future__ import annotations
 
-import csv
 from dataclasses import dataclass
 from pathlib import Path
+
+from .dataset import DatasetError, _rows
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,7 @@ TREATMENTS: dict[str, Treatment] = {
     "DISABLE_FLOW": Treatment("REPORT_ACTIVE_DATA_FLOW", "DISABLE_DATA_FLOW", "VERIFY_DATA_FLOW_DISABLED",
                               frozenset({"ACTIVE"}), frozenset({"DISABLED"})),
 }
+KNOWN_ACTIONS = frozenset({"DELETE", "REDACT", "ANONYMIZE", "RETAIN"})      # the actions deletion_rules.csv may name (AGENTS.md section 1)
 # The account is the subject of the request: its absence is always verified even though other absent DELETE-type
 # records (search entries, exports, ...) are only reported when they still exist. (All 32 samples verify the account.)
 ALWAYS_VERIFY_ABSENT = frozenset({"USER_PROFILE"})
@@ -59,10 +61,13 @@ class PolicyEngine:
     def __init__(self, rules_csv: Path):
         self.rules: dict[str, tuple[str, str]] = {}
         self.rule_ids: dict[str, str] = {}                       # category -> rule_id (for explanations)
-        with rules_csv.open(newline="", encoding="utf-8") as fh:
-            for r in csv.DictReader(fh):
-                self.rules[r["data_category"]] = (r["required_action"].strip().upper(), r["condition"])
-                self.rule_ids[r["data_category"]] = r.get("rule_id", "")
+        for r in _rows(rules_csv, ("data_category", "required_action")):          # a missing file or column is a DatasetError (exit 2), not a traceback
+            action = r["required_action"].strip().upper()
+            if action not in KNOWN_ACTIONS:                                       # an invented action must stop the run, not quietly turn cases into NOT_APPLICABLE
+                raise DatasetError(f"{rules_csv.name}: {r.get('rule_id') or r['data_category']}: unknown required_action {r['required_action']!r} "
+                                   f"for {r['data_category']} (known: {', '.join(sorted(KNOWN_ACTIONS))})")
+            self.rules[r["data_category"]] = (action, r.get("condition", ""))
+            self.rule_ids[r["data_category"]] = r.get("rule_id", "")
 
     def action_for(self, category: str) -> str:
         if category == "DATA_FLOW":

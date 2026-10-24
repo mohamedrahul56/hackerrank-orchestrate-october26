@@ -40,8 +40,11 @@ chain_tolerance_seconds = 2.0
 later_link_max_days = 7
 
 [llm]
-# Screenshots: auto = read them with the vision model only when ANTHROPIC_API_KEY is set; on; off. The key itself is never a setting.
+# Screenshots: auto = read them with the vision model only when ANTHROPIC_API_KEY is set; on = always with the model; off = not read; file = take the readings from
+# a readings file instead of a model (provider "file" in the usage log). The key itself is never a setting.
 images = "auto"
+# Where the readings come from with images = "file" ("" = code/out/agent_readings.json). A JSON file keyed by the sha256 of each PNG; see auditor/readings.py.
+readings_file = ""
 # Vision model that reads the screenshots (env: AUDITOR_VLM_MODEL).
 model = "claude-haiku-5-5"
 # Used only when the first model fails schema validation twice (env: AUDITOR_VLM_FALLBACK_MODEL).

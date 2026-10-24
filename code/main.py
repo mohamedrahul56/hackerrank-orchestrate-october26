@@ -42,13 +42,24 @@ def _make_llm(st, stamp, usage_path):
                timeout_s=st.timeout_seconds)
 
 
+DEFAULT_READINGS = ROOT / "code" / "out" / "agent_readings.json"
+
+
+def _file_readings(st, usage_path):
+    """The readings-file source for images = file (auditor/readings.py). Raises ReadingsError when the file is unusable."""
+    from auditor.llm import UsageLog
+    from auditor.readings import FileReadings
+    return FileReadings(Path(st.readings_file) if st.readings_file else DEFAULT_READINGS, UsageLog(usage_path))
+
+
 def _explain(a, cfg, st, stamp) -> int:
     """--explain: build the auditor exactly as a normal run does, print the explanation, write nothing (no output.csv, notes or usage log)."""
     from auditor.explain import explain
-    if st.images == "on":
+    if st.images in ("on", "file"):
         import tempfile
-        llm = _make_llm(st, stamp, Path(tempfile.mkdtemp()) / "explain_usage.jsonl")          # the usage of an explanation is not part of any run's log
-        cfg.image_extractor = lambda path, system, instruction, schema, version: llm.read_image_json("image", path, system, instruction, schema, version)
+        tmp_usage = Path(tempfile.mkdtemp()) / "explain_usage.jsonl"                              # the usage of an explanation is not part of any run's log
+        source = _make_llm(st, stamp, tmp_usage) if st.images == "on" else _file_readings(st, tmp_usage)
+        cfg.image_extractor = lambda path, system, instruction, schema, version: source.read_image_json("image", path, system, instruction, schema, version)
     auditor = Auditor(a.dataset, cfg)
     try:
         sys.stdout.write(explain(auditor, a.explain))
@@ -73,8 +84,9 @@ def _run(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-timing-heuristics", action="store_true",
                     help="disable the two second-of-minute heuristics (account offsets, analytics 40/41 s offset); they exploit this dataset's event timing")
     ap.add_argument("--cohort-filter", action="store_true", help="ablation only: narrow ambiguous accounts by cohort snapshot (measured harmful, off by default)")
-    ap.add_argument("--images", choices=["auto", "on", "off"], default=None,
-                    help="read the PNG evidence with a vision model (needs ANTHROPIC_API_KEY); auto = only when a key is set (default: settings llm.images)")
+    ap.add_argument("--images", choices=["auto", "on", "off", "file"], default=None,
+                    help="read the PNG evidence with a vision model (needs ANTHROPIC_API_KEY); auto = only when a key is set; file = take the readings from a readings file "
+                         "(settings llm.readings_file, default code/out/agent_readings.json; auditor/readings.py) instead of a model (default: settings llm.images)")
     ap.add_argument("--explain", metavar="CASE_ID", help="print how this one case got its answer (identity, evidence, rule, why each step exists or is omitted) and exit; "
                     "read-only: writes no output file, notes or usage log; screenshots are read only with --images on")
     ap.add_argument("--restart", action="store_true", help="ignore a checkpoint left by an interrupted run and audit every case again")
@@ -105,10 +117,22 @@ def _run(argv: list[str] | None = None) -> int:
     usage_path.parent.mkdir(parents=True, exist_ok=True)
     usage_path.write_text("", encoding="utf-8")                # one log per run: evaluation/usage_report.py summarises exactly this run
     key_present = bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))      # presence only, never the value
-    images_on = st.images == "on" or (st.images == "auto" and key_present)
-    if images_on:
+    images_by_model = st.images == "on" or (st.images == "auto" and key_present)
+    images_from_file = st.images == "file"
+    images_on = images_by_model or images_from_file                  # some source reads the screenshots
+    readings = None
+    if images_by_model:
         llm = _make_llm(st, stamp, usage_path)
         cfg.image_extractor = lambda path, system, instruction, schema, version: llm.read_image_json("image", path, system, instruction, schema, version)
+    elif images_from_file:
+        from auditor.readings import ReadingsError
+        try:
+            readings = _file_readings(st, usage_path)
+        except ReadingsError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        stamp["readings"] = readings.describe()
+        cfg.image_extractor = lambda path, system, instruction, schema, version: readings.read_image_json("image", path, system, instruction, schema, version)
     auditor = Auditor(a.dataset, cfg)
     ds = load_dataset(a.dataset, a.requests)
     # Finished cases are appended to <out>.partial.jsonl as they complete. If this run is killed, the next run with the same inputs, versions and settings
@@ -123,7 +147,8 @@ def _run(argv: list[str] | None = None) -> int:
 
     import hashlib
     from auditor.llm import UsageLog
-    UsageLog(usage_path).add({"kind": "run_info", "images_read_by_model": images_on, "api_key_present": key_present, "requests": len(results), "output_file": a.out.name,
+    UsageLog(usage_path).add({"kind": "run_info", "images_read_by_model": images_by_model, "images_read_from_file": images_from_file,
+                              "readings_file": readings.describe() if readings else "", "api_key_present": key_present, "requests": len(results), "output_file": a.out.name,
                               "output_sha256": hashlib.sha256(a.out.read_bytes()).hexdigest(), "status_counts": dict(Counter(x.status for x in results)),
                               "provisional_rows": [x.case_id for x in results if x.provisional], "stamp": stamp,
                               "checkpoint": ckpt.how, "cases_reused_from_checkpoint": reused})

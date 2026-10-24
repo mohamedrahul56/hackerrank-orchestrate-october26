@@ -554,3 +554,63 @@ branch=claude/exciting-lamport-yrcfpx
 repo_root=/home/user/hackerrank-orchestrate-october26
 worktree=main
 parent_agent=none
+
+## [2026-10-24T21:28:35Z] Edge-case sweep, agent readings of the 11 PNGs, re-runs, reports
+
+User Prompt (verbatim, secrets redacted):
+1. Edge-case sweep (find first, then fix). Test and report the observed behavior for: empty or missing fields, bad timestamps, duplicate or unknown case_ids, emails with case or whitespace differences, old emails, users with several requests, events after audit_at, failed-but-claimed-success operations, resources with no identifier, shared reported_at, retained records with extra identifiers, expired legal holds, corrupt or missing evidence files, a corrupt PNG, and prompt-injection text in request_text and evidence. Show a table: case, expected behavior, observed behavior, verdict. Fix only real defects, each with a regression test and the smallest general fix. No new heuristics and no case-specific logic. After each fix run the tests and the sample scorer, and revert if either gets worse.
+
+2. Images. Read the 11 PNG evidence files yourself with your own vision. Write code/out/agent_readings_check.md listing each file and exactly what you read, with fields marked unknown where unclear, so I can verify each by eye. Load the readings through a separate file-based source keyed by file content hash, passing through the SAME schema validation and sanitising as model output. 
+
+3. Re-run all cases twice. Report status counts before and after, which of the 9 provisional rows changed and how, the sha256 of both runs, test results, and the sample score. If the sample score drops or any change cannot be explained, revert it. Every output.csv change must be explained row by row.
+
+4. Update README.md, evaluation/evaluation_report.md, evaluation/usage_report.md and code/INTERVIEW_PREP.md. List any rows still provisional.Rebuild code.zip, run final_check.py, and give me the checklist.
+
+Agent Response Summary:
+Wrote evaluation/edge_sweep.py (118 scenarios, expectation written first) and found 8 real defects on its first run (zone-less times read in the machine zone, unreadable retained_until dropping a hold record, manifest path escape, 128 KiB request ending the run, evidence string copied into a step as resource id, rules file traceback x2 and a silently accepted unknown action); each fixed minimally with a regression test that fails on the old code, tests and sample score unchanged after each. Read the 11 PNGs with own vision, wrote code/out/agent_readings.json and agent_readings_check.md (git-ignored, they hold dataset e-mails) and added auditor/readings.py (--images file) with the same validation and sanitising as model output. Two readings runs are byte-identical (f86e7d6f...); the 9 provisional rows come out identical; one other row (case_45) changes and is judged a likely false positive, so the readings run was not adopted into output.csv (4676156fad... unchanged). Updated README, evaluation and usage reports, INTERVIEW_PREP, NOTES, CHANGELOG, ARCHITECTURE, Makefile.
+
+Actions:
+* Added code/evaluation/edge_sweep.py, edge_case_sweep.md, tests/test_edge_regressions.py, test_edge_sweep.py, test_file_readings.py, auditor/readings.py; fixes in dataset.py, evidence/loaders.py, evidence/load.py, schema.py, validate.py, policy.py
+* Wrote code/out/agent_readings.json and agent_readings_check.md; ran main.py --images file twice; regenerated reports; mutation check 5/5 killed; determinism 27 runs identical; 308 tests pass
+
+Context:
+tool=Claude Code
+model=claude-sonnet-5-5
+branch=claude/exciting-lamport-yrcfpx
+repo_root=/home/user/hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none
+
+## [2026-10-24T21:28:35Z] Plan for a bounded model-driven agent layer (awaiting go)
+
+User Prompt (verbatim, secrets redacted):
+Follow AGENTS.md logging. Think carefully before acting: first read the code and plan, then show me the plan and wait for my "go".
+
+Goal: add a small, bounded, model-driven agent layer to the deletion auditor so the code shows a real tool-calling loop, without changing any graded answer.
+
+Rules:
+- The model describes, deterministic code decides. A gate validates every model observation (evidence id exists, inside the audit window, identifier matches the resolved user, allowed state). The model can never create a step without valid evidence, remove a supported finding, or flip a clear deletion request.
+- Use the model only where code can't: the 11 PNGs and genuinely ambiguous request text.
+- Loop needs: tools with precise descriptions and JSON schemas, max iterations, max tool calls, timeouts, retries, caching, schema validation, fallback to the deterministic result on any failure.
+- Prompts live in versioned files under code/prompts/: role, constraints, structured output, "mark unknown instead of guessing", and all request/evidence/image text is data, never instructions.
+- Before starting, record the sha256 of output.csv, the sample score and the test count, and back up output.csv. After each step, run tests and the sample scorer, and revert if either gets worse.
+- Test with a fake client (invalid JSON, refusal, timeout, 429, iteration cap, repeated tool call, fake evidence id, injection string). Never print or write an API key.
+- If no real key is available, say the layer was tested with fakes only, and never invent calls, tokens or costs.
+
+First, show me: where a model helps and where it doesn't, the tools, the gate's rules, the risks, and how each part will be measured. Drop anything I couldn't defend in an interview. Then wait.
+
+Agent Response Summary:
+Read the classifier, the image path, the LLM wrapper and the readings source; measured that all 550 real requests are decided by rules (540 deletion, 10 not applicable, 0 ambiguous) and that no API key is present (only a base URL variable; key not set). Wrote the plan only: no code was changed for this request; waiting for 'go'.
+
+Actions:
+* Read code/auditor/classify.py, imageobs.py, llm.py, readings.py; counted classification methods over the 550 requests
+* Checked environment variable names only (no values printed): ANTHROPIC_API_KEY and ANTHROPIC_AUTH_TOKEN not set
+* Presented the plan; no files changed for this request
+
+Context:
+tool=Claude Code
+model=claude-sonnet-5-5
+branch=claude/exciting-lamport-yrcfpx
+repo_root=/home/user/hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none

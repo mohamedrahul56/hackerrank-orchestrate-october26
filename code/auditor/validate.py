@@ -16,7 +16,7 @@ from typing import Any
 from .dataset import Dataset
 from .schema import (
     ALLOWED_TRIPLES, FINDING_TO_REMEDIATIONS, OP_RANK, OUTPUT_HEADER, PHASE_RANK, PHASES,
-    REMEDIATION_TO_VERIFICATION, STATUSES, STEP_FIELDS, sort_key,
+    REMEDIATION_TO_VERIFICATION, STATUSES, STEP_FIELDS, sort_key, valid_resource_id,
 )
 from .outio import read_output_raw
 
@@ -59,6 +59,8 @@ def _schema_issues(case_id: str, steps: Any) -> list[Issue]:
             out.append(Issue(case_id, "BAD_TRIPLE", f"step #{i} ({s['phase']}, {s['operation']}, {s['state']}) not allowed"))
         if not s["system_id"] or not s["resource_id"]:
             out.append(Issue(case_id, "EMPTY_ID", f"step #{i} has empty system_id/resource_id"))
+        elif not valid_resource_id(s["resource_id"]):
+            out.append(Issue(case_id, "BAD_RESOURCE_ID", f"step #{i} resource_id {s['resource_id'][:40]!r} is not of the form <name>_<number>"))
     return out
 
 

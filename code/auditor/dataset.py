@@ -11,8 +11,10 @@ from pathlib import Path
 
 
 def parse_ts(value: str) -> datetime:
-    """Parse the dataset's ISO-8601 'Z' timestamps into aware UTC datetimes."""
-    return datetime.fromisoformat(value.strip().replace("Z", "+00:00")).astimezone(timezone.utc)
+    """Parse the dataset's ISO-8601 'Z' timestamps into aware UTC datetimes. A time without a zone is UTC too (the dataset's convention),
+    never the machine's local time: the answer must not depend on where the program runs."""
+    dt = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    return (dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt).astimezone(timezone.utc)
 
 
 @dataclass(frozen=True)
@@ -49,6 +51,9 @@ class DatasetError(RuntimeError):
     """A file the run cannot do without is missing or has no usable header. Everything else degrades row by row."""
 
 
+csv.field_size_limit(16 * 1024 * 1024)       # the csv module's default (128 KiB per field) would abort the whole run on one long request_text
+
+
 def _rows(path: Path, required: tuple[str, ...] = ()) -> list[dict[str, str]]:
     """Rows of a CSV as dicts. Blank lines are skipped; short rows get empty strings; a missing column in the header is an error."""
     try:
@@ -63,6 +68,8 @@ def _rows(path: Path, required: tuple[str, ...] = ()) -> list[dict[str, str]]:
         raise DatasetError(f"required file not found: {path}") from e
     except UnicodeDecodeError as e:
         raise DatasetError(f"{path.name} is not valid UTF-8: {e}") from e
+    except csv.Error as e:                                          # e.g. a field above the limit: a clear error, not a traceback
+        raise DatasetError(f"{path.name} is not readable as CSV: {e}") from e
 
 
 def try_ts(value: str | None) -> datetime | None:

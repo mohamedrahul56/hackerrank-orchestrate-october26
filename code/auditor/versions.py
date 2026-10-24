@@ -71,4 +71,6 @@ def stamp_lines(st: dict) -> list[str]:
     L = [f"* pipeline version: `{st['pipeline']}`", f"* rules file (deletion_rules.csv) sha256: `{st['rules']}`"]
     L += [f"* prompt `{name}`: version `{p['version']}`, text+schema sha256 `{p['digest']}`" for name, p in sorted(st["prompts"].items())]
     L += [f"* code sha256 (auditor/*.py): `{st['code']}`", f"* settings fingerprint: `{st['settings']}`"]
+    if st.get("readings"):
+        L.append(f"* screenshots read from a READINGS FILE, not by a model: {st['readings']}")
     return L

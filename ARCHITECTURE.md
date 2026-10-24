@@ -26,6 +26,7 @@ flowchart TD
     EVF --> PARSE["evidence parsers: SQL, JSON, logs, text, PDF"]
     EVF -. "PNG screenshots, optional" .-> VLM["llm.py: vision model only describes, results cached"]
     VLM --> PARSE
+    RDG["readings.py: a file of readings keyed by PNG hash, same validation and sanitising, optional"] -.-> PARSE
     PARSE --> OBS["uniform observations: resource, category, state, identifiers, capture time"]
     IDR --> LINK["link: exact identifier match only"]
     OBS --> LINK
@@ -49,7 +50,7 @@ flowchart TD
     CKPT -. "resume after a kill" .-> STEPS
 ```
 
-Reading the diagram: solid arrows carry data, dotted arrows carry configuration, versions or optional paths. The model (vision) sits beside the parsers; it can only add observations that code then validates. It never reaches the policy, the state or the steps.
+Reading the diagram: solid arrows carry data, dotted arrows carry configuration, versions or optional paths. The model (vision) or a readings file sits beside the parsers; it can only add observations that code then validates. It never reaches the policy, the state or the steps.
 
 ## 2. Modules
 
@@ -62,6 +63,7 @@ Reading the diagram: solid arrows carry data, dotted arrows carry configuration,
 | `auditor/identity.py` | request email to user, plus every email, hash and phone the user has ever had (current snapshot and audit log) | name or fuzzy matching |
 | `auditor/dataset.py` | typed, lenient CSV loading; a bad row is reported, never fatal | |
 | `auditor/evidence/*` | one parser per format into uniform observations; `load.py` walks the manifest in order; `imageobs.py` turns a validated screenshot reading into observations; `imagejobs.py` runs the screenshot reads concurrently and replays them in manifest order | judging compliance |
+| `auditor/readings.py` | a readings FILE (JSON keyed by the sha256 of each PNG) that answers the same call as `llm.py`: the same schema validation, the same downstream sanitising, provider `file` in the usage log; used only with `--images file` | making a reading up for an image whose hash is not in the file |
 | `auditor/llm.py` | the only module that talks to a model: schema validation, one re-ask, fallback model, backoff with `Retry-After`, shared pause after a 429, per-request timeout, on-disk cache keyed by image, prompt text, model, schema, pipeline version and rules digest, usage log | prices (they come from `config/prices.json`, never from code) |
 | `auditor/link.py` | ties a resource to a user by exact identifier, resource id or catalog link; remembers which file made each link | state, and never names |
 | `auditor/discover.py` | finds the deleted accounts and anonymized analytics records that carry no identifier, from the deletion worker's activity timeline, by elimination across all cases; time indexes and an inverted index keep it near linear | state of any resource |
@@ -93,6 +95,14 @@ Each row is exercised by a test (file in the last column, all under `code/tests/
 | model returns invalid JSON or a refusal | one re-ask, then the fallback model with one re-ask, then "not read" | `test_image_concurrency`, `test_robustness` |
 | the same screenshot is read twice at once | one model call; the second waits and hits the cache | `test_image_concurrency` |
 | a cached reading is stale (prompt, model, schema, pipeline version or rules file changed) | the cache key contains all of them, so it is a miss | `test_versions_settings` |
+| a time without a zone (`2026-08-20T09:00:00`) | read as UTC, never the machine's time zone, so the answer does not depend on where it runs | `test_edge_regressions` |
+| a manifest path that leaves the dataset folder (`../x`, an absolute path) | not read; a warning says so | `test_edge_regressions` |
+| a `request_text` above 128 KiB | audited like any other; a field beyond 16 MiB is a clear error instead of a traceback | `test_edge_regressions` |
+| a resource id in evidence that is not `<name>_<number>` (a path, a sentence, SQL) | the observation is dropped with a warning; the validator rejects such a step | `test_edge_regressions` |
+| a legal-hold `retained_until` that cannot be parsed | counts as no end date: the hold stays active, the record is kept and verified | `test_edge_regressions` |
+| `deletion_rules.csv` missing, without `required_action`, or with an unknown action | stops with a message naming the file or rule, exit code 2, nothing written | `test_edge_regressions` |
+| `--images file` with an unusable readings file; an image whose hash is not in it; readings made for another prompt version; a reading that does not fit the schema | exit code 2; "not read"; "not read"; schema error then "not read" | `test_file_readings`, `test_edge_sweep` |
+| any other awkward input of the 118-scenario sweep (empty fields, bad times, duplicate ids, e-mail spelling, old e-mails, shared `reported_at`, corrupt files and PNGs, injection) | the expected behaviour stated in `code/evaluation/edge_case_sweep.md` | `test_edge_sweep` |
 | the run is killed | finished cases are on disk; the next run with the same inputs, versions and settings audits only the missing ones and writes the same `output.csv` | `test_resume` |
 | the checkpoint is torn, damaged, or made for other inputs, versions or settings | the damaged tail is dropped and redone; a foreign checkpoint is discarded and said so | `test_resume` |
 | a settings file or `--set` has an unknown key, wrong type or out-of-range value | error on stderr, exit code 2, nothing written | `test_versions_settings` |

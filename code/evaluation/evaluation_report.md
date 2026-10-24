@@ -218,10 +218,44 @@ Cases whose resource is linked explicitly are hidden at random, the real discove
 
 * **Deterministic-only (what produced `output.csv`)**: the rows above. None of the 32 labeled samples depends on a screenshot, so the vision path cannot change a sample score.
 * **With the vision model: not measured.** No API key was available in this environment. The path (prompt, JSON schema, validation, cache, retries, usage log, fallback model) is covered by tests with a fake client, and `evaluation/show_image_readings.py` lets a reader compare each of the 11 PNGs with the model's reading. The only rows that can change are the 9 provisional ones (`case_34, case_35, case_39, case_50, case_52, case_53, case_55, case_61, case_63`), plus any row whose evidence includes a PNG that the structured data already covers.
+* **Screenshots read from a readings file (the coding agent's own reading of the 11 PNGs, not a model call by the program).** `--images file` takes each screenshot's reading from `code/out/agent_readings.json`, keyed by the sha256 of the PNG's bytes, and passes it through the same JSON-schema validation and the same field sanitising as a model's answer (`auditor/readings.py`; the transcription for the reader to check by eye is `code/out/agent_readings_check.md`).
+  * Two full runs: exit codes 0, 0; sha256 `f86e7d6ff43019c2...` and `f86e7d6ff43019c2...`: **byte-identical**. The submitted `output.csv` is `4676156fadff1e30...`.
+  * Status counts: submitted run COMPLETE 152, INCOMPLETE 356, NOT_APPLICABLE 10; with readings COMPLETE 152, INCOMPLETE 356, NOT_APPLICABLE 10. Provisional rows: 9 in the submitted run, 0 with readings.
+  * The 9 provisional rows: **9 come out identical** once the screenshot is actually read (the provisional assumption, 'the record the data catalog ties to the user is still there', was confirmed by the reading in every one); 0 changed.
+  * Rows of `output.csv` that differ (1): `case_45`.
+    * `case_45` COMPLETE -> COMPLETE: removed VERIFY_RECORD_PRESENT `audit_record_003` (evidence_55); added VERIFY_RECORD_PRESENT `audit_record_001` (evidence_37), VERIFY_RECORD_PRESENT `audit_record_002` (evidence_37), VERIFY_RECORD_PRESENT `audit_record_003` (evidence_37), VERIFY_RECORD_PRESENT `audit_record_004` (evidence_37), VERIFY_RECORD_PRESENT `audit_record_005` (evidence_37), VERIFY_RECORD_PRESENT `audit_record_006` (evidence_37).
+  * **Not adopted into the submitted `output.csv`.** The one differing row comes from the security-audit screenshot, which lists six events for one user as `audit_record_N`; in every other source each user has exactly one audit record (457 of 457 users with one, and 24 of 24 sample answers that verify an audit record verify exactly one), so the five extra verification steps are most likely false positives. In addition, a submission that depends on a readings file cannot be reproduced from `code.zip` (the file holds dataset e-mail addresses and is never zipped). `--images file` is the way to reproduce the experiment.
+
+### 5.5 Edge-case sweep
+
+`code/evaluation/edge_sweep.py` runs the real pipeline on small synthetic datasets that each isolate one awkward input (empty or missing fields, bad timestamps, duplicate or unknown ids, e-mail spelling, old e-mails, several requests per user, events after audit_at, failed-but-claimed-success operations, resources without an identifier, shared reported_at, retained records with extra identifiers, expired legal holds, corrupt or missing evidence, corrupt PNGs, prompt injection). Every scenario states its expected behaviour in words before the run; the full table (case, expected, observed, verdict) is `code/evaluation/edge_case_sweep.md`.
+
+| area | scenarios | OK | DECISION | DEFECT |
+|---|---|---|---|---|
+| empty or missing fields | 13 | 13 | 0 | 0 |
+| bad timestamps | 9 | 9 | 0 | 0 |
+| duplicate / unknown case_id | 8 | 8 | 0 | 0 |
+| e-mail spelling | 8 | 7 | 1 | 0 |
+| old e-mails | 5 | 5 | 0 | 0 |
+| several requests per user | 3 | 3 | 0 | 0 |
+| events after audit_at | 6 | 5 | 1 | 0 |
+| failed-but-claimed-success | 5 | 5 | 0 | 0 |
+| resources with no identifier | 3 | 3 | 0 | 0 |
+| shared reported_at | 2 | 2 | 0 | 0 |
+| retained records with extra identifiers | 4 | 4 | 0 | 0 |
+| expired legal holds | 7 | 7 | 0 | 0 |
+| corrupt or missing evidence | 21 | 21 | 0 | 0 |
+| corrupt PNG | 10 | 10 | 0 | 0 |
+| prompt injection in evidence | 5 | 5 | 0 | 0 |
+| prompt injection in request_text | 7 | 7 | 0 | 0 |
+| real data | 2 | 2 | 0 | 0 |
+| **all** | **118** | **116** | **2** | **0** |
+
+The first run of the sweep on the code before any fix found **8 defects**, all fixed with regression tests (`tests/test_edge_regressions.py`); see section 7 and the defects table at the end of `edge_case_sweep.md`.
 
 ## 6. Provisional rows
 
-9 deletion requests have a screenshot as their only state evidence. Without a vision-model key each is answered `INCOMPLETE` with three steps (finding on the record the data catalog ties to the user inside the window, citing the in-window screenshot of the same system; remediation; verification). The state is assumed, not read. They are listed in `output.notes.md`, in `phase4_results.md` and below.
+9 deletion requests have a screenshot as their only state evidence. Without a vision-model key each is answered `INCOMPLETE` with three steps (finding on the record the data catalog ties to the user inside the window, citing the in-window screenshot of the same system; remediation; verification). The state is assumed, not read. They are listed in `output.notes.md`, in `phase4_results.md` and below. **They are still provisional in the submitted `output.csv`**: the submitted run used neither a model nor a readings file. With the readings file all of them are computed normally and come out identical (section 5.4).
 
 | case | reported_status | provisional steps |
 |---|---|---|
@@ -245,6 +279,7 @@ The loop log below is `CHANGELOG.md` verbatim: each row is a change with the mot
 * **'No later-evidence' ablation leaked later evidence** through late-linked accounts, and those links were not in the log; fixed and logged (row 19).
 * **A wrong NOT_APPLICABLE placeholder** for deletion requests whose only evidence is a screenshot; replaced by provisional INCOMPLETE rows (row 23).
 * **An instruction-like status word extracted from an image could have flipped a state**; model-written fields are now sanitised (row 28).
+* **The edge-case sweep (section 5.5) found 8 defects** on its first run: a time without a zone was read in the machine's time zone; an unreadable `retained_until` dropped a legal-hold record; a manifest path could leave the dataset folder; a request text above 128 KiB ended the whole run; a resource id taken from evidence was copied into a step verbatim; a missing or malformed rules file was a traceback and an unknown rule action silently turned cases into NOT_APPLICABLE (row 44).
 
 | # | change | motivation | before | after | verdict |
 |---|---|---|---|---|---|
@@ -292,6 +327,8 @@ The loop log below is `CHANGELOG.md` verbatim: each row is a change with the mot
 | 41 | Bounded concurrent screenshot reads (`evidence/imagejobs.py`, `llm.py`): a thread pool of `llm.max_concurrency` (1 to 16, default 4) prefetches the readings, results are applied in manifest order; a 429 pauses every worker (Retry-After honoured, capped at 60 s), per-request timeout, whole-line usage rows, atomic cache writes, one call for the same image read twice at once; `tests/test_image_concurrency.py` | follow-up request: bounded concurrent image reads with rate-limit backoff and stable output order | sequential reads, backoff local to one call | fake client: success with exactly 3 calls in flight for a bound of 3, completion order reversed with identical observations, 429 (with and without Retry-After), 429 that never clears, timeout, invalid JSON re-asked and given up, a mix of all failures giving the same result sequentially and concurrently (18 tests, 15 repetitions without a failure); no real model call was made | kept |
 | 42 | `Makefile` (`help setup test run score explain package check bench clean`) and a README quick start; `make check` builds `code.zip` itself; `ARCHITECTURE.md` and the `Makefile` are now part of `code.zip` and required by `package.py`; `performance_report.md` is required with the final reports | follow-up request: make targets, README quick start, verify each target on a clean clone | no single entry point for the common tasks | every target run in a fresh `git clone` of the committed tree: help, setup, test (274 tests, 0 failures), run (output.csv byte-identical to the committed one), score, explain (with and without `CASE`), package, check (0 failed; the 3 items only the user can verify stay marked NOT VERIFIED), bench, clean, and `git status` clean afterwards. The clean clone found two defects, both fixed: the README and Makefile example `case_1` is not a case id (ids are `case_01` .. `case_550`; the example is now `case_48`, guarded by a test), and `make check` failed in a clone because `code.zip` is git-ignored and was never built | kept |
 | 43 | `ARCHITECTURE.md`: mermaid data-flow diagram, module responsibility table, failure-mode table with the test that covers each row, the measured wall-time table copied from the generated performance report (a test compares them), four decision records (deterministic core, omit when unsure, timing heuristics and their risk, no link no step); `tests/test_architecture.py`, `tests/test_failure_modes.py` | follow-up request | no single design document | writing the failure table exposed two rows without a test (an email that matches nobody; a written file that fails validation) and a hold-out tool that had silently broken when the discovery inputs gained a field; tests added for all three, hold-out repaired. README line claimed a model tie-break for ambiguous request wording that `main.py` never enables; corrected in README and evaluation report | kept |
+| 44 | `evaluation/edge_sweep.py` (118 scenarios, each with its expected behaviour written first, on synthetic datasets built with the extra-case builder) and `tests/test_edge_regressions.py`; eight fixes: zone-less times read as UTC (`dataset.py`), unreadable `retained_until` = no end date (`loaders.py`), manifest paths must stay inside the dataset folder (`load.py`), csv field limit 16 MiB and `csv.Error` as `DatasetError` (`dataset.py`), resource ids not of the form `<name>_<number>` dropped from evidence and rejected by the validator (`schema.py`, `load.py`, `validate.py`), the rules file read strictly with unknown actions rejected (`policy.py`) | follow-up request: find edge-case defects first, then fix only the real ones, each with a regression test and the smallest general fix, no new heuristic | first sweep on the previous commit: 8 defects in 112 scenarios (time zone dependence, hold record lost, path escape, 128 KiB request ended the run, `cache_101; DROP TABLE users` copied into a step, rules-file traceback x2, unknown rule action silently NOT_APPLICABLE) | 118 scenarios: 116 OK, 2 DECISION, 0 DEFECT; the regression tests fail on the old code (8 failures, 7 errors) and pass now; after every fix: whole suite green, sample score identical (status 32/32, step F1 99.2%), committed `output.csv` byte-identical | kept |
+| 45 | `auditor/readings.py` and `--images file`: a readings file keyed by the sha256 of each PNG answers the model call, through the same schema validation and the same sanitising; 11 readings of the 11 screenshots made by the coding agent with its own vision (`code/out/agent_readings.json`, check sheet `code/out/agent_readings_check.md`, both git-ignored because they hold dataset e-mail addresses); `tests/test_file_readings.py` | follow-up request: read the 11 PNGs yourself and load them through a file-based source | 9 provisional rows; screenshots unread | two runs with the readings: sha256 `f86e7d6ff43019c2...` both, byte-identical; status counts unchanged; the 9 provisional rows come out identical (the assumption held 9 of 9) and are no longer provisional; the sample score is identical with the readings; ONE other row changes (`case_45`: six audit-record verifications from the security-audit screenshot instead of one) which contradicts 457 of 457 users having one audit record, so the readings run is not adopted into the submitted `output.csv` | experiment kept, output not adopted |
 
 ## 8. Remaining failures and known weaknesses
 
@@ -305,12 +342,12 @@ The loop log below is `CHANGELOG.md` verbatim: each row is a change with the mot
 ## 9. Determinism, robustness, tests
 
 * two full runs on all 518 requests (deterministic path, no model): exit codes 0, 0; files **byte-identical**; validator errors on the written file: 0. The committed `output.csv` is byte-identical to a fresh run: **yes**.
-* test suite: **274 tests, 0 failures, 0 errors** (`python3 -m unittest discover -s code/tests -t code`): scorer and validator, classifier (112 request sentences, paraphrases), pipeline stages, the synthetic cases, robustness (malformed rows, corrupt files, API timeouts / rate limits / invalid JSON / refusals with a fake client, injection strings in model-written fields), packaging rules, no-hardcoding scan and secrets scan.
+* test suite: **308 tests, 0 failures, 0 errors** (`python3 -m unittest discover -s code/tests -t code`): scorer and validator, classifier (112 request sentences, paraphrases), pipeline stages, the synthetic cases, robustness (malformed rows, corrupt files, API timeouts / rate limits / invalid JSON / refusals with a fake client, injection strings in model-written fields), the edge-case sweep and its regression tests, bounded concurrent image reads, the resume tests (a real SIGKILL), readings-file tests, packaging rules, no-hardcoding scan and secrets scan.
 * model nondeterminism (cleared-cache rerun with a real model): **not measured** (no key); cold / warm / cleared-cache agreement is tested with a fake client.
 
 ## 10. Not measured
 
-* vision-model accuracy on the 11 screenshots, its run-to-run variance, token usage and cost (no API key was available; `usage_report.md` states 0 calls);
+* vision-model accuracy on the 11 screenshots, its run-to-run variance, token usage and cost (no API key was available; `usage_report.md` states 0 calls). The readings file is one pass of the coding agent's own vision, checked by nobody else yet, and is not a measurement of a vision model;
 * the true answers of the 9 provisional rows;
 * the exposed-identifier shape of a legal-hold record, and all policy categories without a labeled sample, beyond the synthetic cases;
 * behaviour on another dataset instance (another generator seed) and whether the timing heuristics hold there;

@@ -59,7 +59,8 @@ class Settings:
     # [discovery] / [audit]
     tune: Tunables = field(default_factory=Tunables)
     # [llm]
-    images: str = "auto"                  # auto | on | off
+    images: str = "auto"                  # auto | on | off | file   (file = readings from a file, see auditor/readings.py)
+    readings_file: str = ""               # "" = code/out/agent_readings.json; used only with images = file
     model: str = "claude-haiku-5-5"
     fallback_model: str = "claude-sonnet-5-5"
     cache_dir: str = ""                   # "" = code/.cache/llm
@@ -69,9 +70,9 @@ class Settings:
     def fingerprint(self) -> str:
         """Hash of everything that can change the answer. cache_dir is excluded (a path); the model names count only when images are read."""
         d = _to_plain(self)
-        for k in ("cache_dir", "max_concurrency", "timeout_seconds"):     # how the model is called, not what the answer is
+        for k in ("cache_dir", "max_concurrency", "timeout_seconds", "readings_file"):     # how readings are fetched (the readings' content is in the resume key), not a setting of the answer
             d.pop(k, None)
-        if self.images == "off":
+        if self.images in ("off", "file"):
             d.pop("model", None), d.pop("fallback_model", None)
         return hashlib.sha256(json.dumps(d, sort_keys=True).encode()).hexdigest()
 
@@ -88,7 +89,7 @@ def _to_plain(s: Any) -> dict:
 _TOP = {f.name for f in fields(Settings)} - {"tune"}
 _TUNE = {f.name for f in fields(Tunables)}
 _SECTIONS = {"pipeline": {"later_linking", "discovery", "timing_heuristics", "cohort_filter", "provisional_rows"},
-             "llm": {"images", "model", "fallback_model", "cache_dir", "max_concurrency", "timeout_seconds"},
+             "llm": {"images", "readings_file", "model", "fallback_model", "cache_dir", "max_concurrency", "timeout_seconds"},
              "discovery": {"account_window_minutes", "analytics_window_minutes", "phase_margin", "analytics_min_llr", "chain_gaps_seconds", "chain_tolerance_seconds"},
              "audit": {"later_link_max_days"}}
 
@@ -124,8 +125,8 @@ def _coerce(name: str, current: Any, value: Any) -> Any:
 
 
 def _validate(s: Settings) -> Settings:
-    if s.images not in ("auto", "on", "off"):
-        raise SettingsError(f"llm.images: must be auto, on or off, got {s.images!r}")
+    if s.images not in ("auto", "on", "off", "file"):
+        raise SettingsError(f"llm.images: must be auto, on, off or file, got {s.images!r}")
     t = s.tune
     for n in ("account_window_minutes", "analytics_window_minutes"):
         lo, hi = getattr(t, n)

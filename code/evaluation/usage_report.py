@@ -45,7 +45,8 @@ def read_log(path: Path) -> list[dict]:
 
 def summarise(rows: list[dict], n_requests: int, prices: dict, price_problems: list[str], log_path: str = "") -> str:
     info = next((r for r in rows if r.get("kind") == "run_info"), None)
-    rows = [r for r in rows if r.get("kind") != "run_info"]
+    from_file = [r for r in rows if r.get("provider") == "file"]              # readings taken from a file: no model, no tokens, no price
+    rows = [r for r in rows if r.get("kind") != "run_info" and r.get("provider") != "file"]
     live = [r for r in rows if not r.get("cache_hit") and not r.get("error")]
     hits = [r for r in rows if r.get("cache_hit")]
     failed = [r for r in rows if r.get("error")]
@@ -54,7 +55,7 @@ def summarise(rows: list[dict], n_requests: int, prices: dict, price_problems: l
          "Everything below is computed from that log; no figure is typed in by hand.", ""]
     if info:
         L += [f"* run that produced `{info['output_file']}` (sha256 `{info['output_sha256'][:16]}...`): {info['requests']} requests, status counts {kv(info['status_counts'])}, "
-              f"images read by a vision model: **{'yes' if info['images_read_by_model'] else 'no'}**, API key present in the environment: **{'yes' if info['api_key_present'] else 'no'}** (presence only)",
+              f"images read by a vision model: **{'yes' if info['images_read_by_model'] else 'no'}**, images read from a readings file: **{'yes' if info.get('images_read_from_file') else 'no'}**, API key present in the environment: **{'yes' if info['api_key_present'] else 'no'}** (presence only)",
               f"* provisional rows in that output ({len(info['provisional_rows'])}): {', '.join(info['provisional_rows']) or 'none'}", ""]
     if hits:
         L += [f"> **Not a cold-cache run**: the log contains {len(hits)} cache hits. Delete the cache directory and rerun before submitting this report.", ""]
@@ -105,13 +106,32 @@ def summarise(rows: list[dict], n_requests: int, prices: dict, price_problems: l
         L += [f"* {price_mod.NOT_SUPPLIED}." + ("  " + "; ".join(price_problems).replace(str(ROOT) + "/", "") if price_problems else "")]
     if by_model and not priced_all and prices:
         L += [f"* models without a complete price entry: {sorted(set(m for m, _ in by_model) - set(prices))}"]
+    if from_file:
+        L += ["", "## Readings taken from a file (no model call)", "",
+              f"* {len(from_file)} screenshot readings were taken from a readings file ({from_file[0].get('source', '')}): provider `file`, 0 model calls, 0 tokens, no cost. "
+              "They are not model output; see `auditor/readings.py` for how they are validated and sanitised."]
     L += ["", "## Cache and failures", "",
           f"* live calls: {len(live)}; cache hits: {len(hits)}; calls that failed schema validation twice: {len(failed)} (those images fall back to the deterministic result and are listed in the run notes)"]
     return "\n".join(L) + "\n"
 
 
+def readings_appendix(log: Path) -> list[str]:
+    """A short section about the readings-file experiment (a second run that is NOT the submitted one), built from its own usage log. Empty when that log is absent."""
+    rows = read_log(log)
+    info = next((r for r in rows if r.get("kind") == "run_info"), None)
+    if not info or not info.get("images_read_from_file"):
+        return []
+    files = [r for r in rows if r.get("provider") == "file"]
+    return ["", "## Appendix: the experiment with a readings file (not the submitted run)", "",
+            f"* `python3 code/main.py --images file` read {len(files)} screenshots from a readings file instead of a model: **0 model calls, 0 input tokens, 0 output tokens, no cost**. "
+            f"It produced `{info['output_file']}` (sha256 `{info['output_sha256'][:16]}...`), status counts {kv(info['status_counts'])}, provisional rows {len(info['provisional_rows'])}.",
+            f"* readings source: {info.get('readings_file', '')}",
+            "* The submitted `output.csv` was produced by the run above, without the readings file; the differences between the two outputs are explained in section 5.4 of `evaluation_report.md`."]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--readings-log", type=Path, default=ROOT / "code" / "out" / "run_readings_1.usage.jsonl", help="usage log of a `--images file` run, summarised in an appendix when present")
     ap.add_argument("--log", type=Path, default=Path(os.environ.get("AUDITOR_USAGE_LOG", DEFAULT_LOG)))
     ap.add_argument("--requests", default="deletion_requests.csv")
     ap.add_argument("--require-run-info", action="store_true", help="fail unless the log carries the run_info row written by main.py")
@@ -125,6 +145,7 @@ def main() -> int:
         return 2
     prices, problems = price_mod.load()
     text = summarise(rows, n, prices, problems, str(args.log.relative_to(ROOT)) if args.log.is_relative_to(ROOT) else args.log.name)
+    text += "\n".join(readings_appendix(args.readings_log)) + "\n" if readings_appendix(args.readings_log) else ""
     out = FINAL if args.final else PREVIEW
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text, encoding="utf-8")

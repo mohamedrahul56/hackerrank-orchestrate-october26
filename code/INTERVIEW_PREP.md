@@ -1,7 +1,7 @@
 # Interview preparation - Ghost Data Still Exists deletion-audit agent
 
 Every number below is from this repository's own reports (`code/evaluation/evaluation_report.md`, `phase3_results.md`, `phase4_results.md`, `CHANGELOG.md`) or from `output.csv`;
-where something was not measured, this document says so. Test count at the time of writing: **274 tests, all passing**.
+where something was not measured, this document says so. Test count at the time of writing: **308 tests, all passing**.
 
 ## 1. The two-minute architecture explanation
 
@@ -161,3 +161,11 @@ tested with a fake client only; it is not measured.
 * **What happens if the run is killed?** Finished cases are on disk with checksums; the next run with the same inputs, versions and settings audits only the missing ones and writes the same bytes (tested by SIGKILL and comparing sha256). A checkpoint made for anything else is discarded.
 * **How do you know a cached model reading is still valid?** The cache key contains the image, prompt label and text digest, model, schema, pipeline version and rules digest; changing any of them is a miss (tested).
 * **What if the API rate-limits you?** Backoff 1, 2, 4 s or the server's `Retry-After` (capped at 60 s), shared by all workers; after four tries the image is reported as not read and the affected requests get provisional rows. Tested with a fake client only; no real model was called.
+
+## 7. Edge cases and the screenshot readings (added after the operations follow-ups)
+
+* **How did you look for edge-case bugs?** I wrote 118 scenarios (`evaluation/edge_sweep.py`), each with the expected behaviour in words BEFORE running it, on small synthetic datasets: empty fields, bad timestamps, duplicate ids, e-mail spelling, old e-mails, shared `reported_at`, corrupt files and PNGs, prompt injection. The first run on the previous code found 8 real defects (time-zone dependence of zone-less times, a lost legal-hold record, a manifest path that could leave the dataset folder, a 128 KiB request that ended the whole run, an evidence string copied into a step as a resource id, and a rules file that was a traceback or silently turned cases into NOT_APPLICABLE). Each got the smallest general fix and a regression test that fails on the old code; after each fix the tests and the sample score were checked.
+* **What did you decide rather than fix?** Two identity rows with the same address (the owner at request time wins); an unknown state is never reported as a violation (evidence that exists only after `audit_at` creates no finding); a request in an uncovered language is NOT_APPLICABLE. All three are in the sweep's DECISION rows.
+* **Who read the 11 screenshots?** The coding agent, with its own vision, in one session: not the program and not a model call it made. The readings are a JSON file keyed by the PNG's content hash, loaded through the same schema validation and sanitising as a model answer (`auditor/readings.py`). They are unverified by anyone else; `code/out/agent_readings_check.md` lets a person check each by eye, with unknown fields marked UNKNOWN.
+* **Why is the submitted `output.csv` not the one with the readings?** Two reasons. The readings file and the check sheet contain dataset e-mail addresses, so they cannot be shipped in `code.zip`, and an output that cannot be reproduced from the zip is a worse submission. And the readings run changes exactly one row, `case_45`, adding five audit-record verifications from a screenshot that lists six events for one user, which contradicts the rest of the data (457 of 457 users have one audit record). The nine provisional rows came out identical when read, so the provisional assumption held in 9 of 9.
+* **Which rows are still provisional?** `case_34 35 39 50 52 53 55 61 63`, because the submitted run used neither a model nor a readings file.

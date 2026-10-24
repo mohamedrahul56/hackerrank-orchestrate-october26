@@ -5,7 +5,17 @@ reads it from here, so the validator, the step generator and the scorer cannot d
 """
 from __future__ import annotations
 
+import re
 from typing import Any
+
+# A resource id is "<words>_<digits>" (for example "account_7" or "data_flow_12"). Anything else read from evidence (a path, a sentence, SQL) is not a
+# resource and must never reach an output step.
+RESOURCE_ID_SHAPE = re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*_\d+")
+
+
+def valid_resource_id(value: object) -> bool:
+    return isinstance(value, str) and RESOURCE_ID_SHAPE.fullmatch(value) is not None
+
 
 STATUSES = ("COMPLETE", "INCOMPLETE", "NOT_APPLICABLE")
 PHASES = ("FINDING", "REMEDIATION", "VERIFICATION")

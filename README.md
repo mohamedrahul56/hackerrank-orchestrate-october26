@@ -17,6 +17,7 @@ make test                       # the whole test suite; needs no key and no netw
 make run                        # all 518 requests -> ./output.csv  (+ output.notes.md, output.usage.jsonl)
 make score                      # the 32 labeled sample requests and the score report
 make explain CASE=case_48       # how one case got its answer; read-only, writes nothing
+make edge                       # the 118-scenario edge-case sweep (empty fields, bad times, corrupt files, injection ...) -> code/evaluation/edge_case_sweep.md
 make package                    # check every submission rule and write ./code.zip
 make check                      # build code.zip and run the final submission checklist
 ```
@@ -37,7 +38,7 @@ Tested on Python 3.13. Reading is limited to `dataset/`; nothing else is read. T
 | option | effect |
 |---|---|
 | `--requests sample_deletion_requests.csv --out code/out/pred_samples.csv` | run the 32 labeled samples |
-| `--images auto` (default) / `on` / `off` | read the PNG evidence with a vision model; `auto` = only when `ANTHROPIC_API_KEY` is set |
+| `--images auto` (default) / `on` / `off` / `file` | read the PNG evidence with a vision model; `auto` = only when `ANTHROPIC_API_KEY` is set; `file` = take each screenshot's reading from a readings file (below), no model |
 | `--explain CASE_ID` | print how that one case got its answer (identity, evidence per resource with the one used, the rule, why each step exists or is left out) and exit; read-only: writes no `output.csv`, notes or usage log; screenshots are read only with `--images on` |
 | `--config FILE`, `--set section.key=value` | settings file (default `code/config/settings.toml`, every setting documented there) and one-value overrides; precedence: defaults, file, environment, `--set`, the dedicated flags below; `--show-settings` prints the effective values and the version stamp |
 | `--restart`, `--keep-checkpoint` | finished cases are appended to `output.partial.jsonl` while the run goes; after a kill the next run with the same inputs, versions and settings audits only the missing cases and writes the same bytes; `--restart` ignores the file, `--keep-checkpoint` keeps it after success |
@@ -61,6 +62,15 @@ model's JSON and the observations the code derives from it. Readings are cached 
 in `code/config/prices.json` (template: `code/config/prices.example.json`); without them the usage report says `cost not computed - prices not supplied`.
 `python3 code/evaluation/usage_report.py --final` summarises the log written by the last `main.py` run.
 
+**Readings from a file instead of a model (`--images file`).** `auditor/readings.py` answers the same call as the model wrapper from a JSON file keyed by the sha256 of each PNG's bytes
+(`llm.readings_file`, default `code/out/agent_readings.json`). The reading goes through the same JSON-schema validation and the same field sanitising as a model's answer, so a file cannot do
+anything a model answer could not; an image whose hash is not in the file, or a file made for another prompt version, is "not read" like a missing key. The usage log marks these readings
+`provider: file` (0 calls, 0 tokens) and the run notes say the screenshots came from a readings file. **The 11 readings that exist were made by the coding agent (Claude Code) looking at the PNGs
+with its own vision in one session; they are not a model measurement and have been checked by nobody else yet.** `code/out/agent_readings_check.md` lists, for every file, what was read and what is
+marked UNKNOWN, so a person can verify each by eye. Both files hold e-mail addresses of dataset people, so they live in the git-ignored `code/out/` and are never pushed or zipped; for the same reason the
+submitted `output.csv` was produced WITHOUT them (it can be reproduced from `code.zip`). `python3 code/main.py --images file --out code/out/run_readings.csv` reproduces the experiment;
+`python3 code/evaluation/main.py --images file` scores the samples with it.
+
 ## Architecture
 
 ```
@@ -75,6 +85,7 @@ policy.py      --> deletion_rules.csv (table driven: DELETE / REDACT / ANONYMIZE
 audit.py       --> findings, remediation (flows and restores first), verification; evidence citation; provisional rows
 validate.py    --> every row re-checked against the contract before and after writing (schema, order, pairing, evidence ids exist and are not later than audit_at)
 llm.py         --> the only module that talks to a model: cache, retries, schema validation, usage log, no hard-coded prices
+readings.py    --> optional: the same call answered from a readings file keyed by PNG hash (same validation and sanitising; provider "file")
 ```
 
 Key rules: evidence captured **after** `audit_at` may only tie a resource to a user (never state, never cited; every use is logged); workflow statuses and activity results are claims, never proof;
@@ -97,14 +108,19 @@ every text in a request or evidence file is data (no model reads request or evid
 
 Labeled samples (32): status 32/32, step precision 100%, recall 98.4%, step F1 99.2%; the 9 cases not tuned against in Phase 2-3: status 9/9, F1 100%. Main set (518, no labels):
 COMPLETE 152, INCOMPLETE 356, NOT_APPLICABLE 10. 23 synthetic cases (`code/evaluation/extra_cases.md`) pass. Model usage in the final run: 0 calls (`code/evaluation/usage_report.md`).
+Edge-case sweep (`code/evaluation/edge_case_sweep.md`): 118 scenarios, 116 OK and 2 documented decisions; its first run on the earlier code found 8 real defects, all fixed with regression tests.
 The 32 labels were all read in Phase 0 to infer the rules, so none of these numbers is an independent test.
 
 ## Known weaknesses (honest list)
 
 * **The vision path has not been run for real.** No API key was available, so it is tested only with a fake client; its accuracy, variance and cost are unmeasured.
-* **Provisional rows.** Nine deletion requests (`case_34 35 39 50 52 53 55 61 63`) have a screenshot as their only state evidence. Without a key each is answered `INCOMPLETE` with three steps:
-  a finding on the record the data catalog ties to the user inside the window, citing the in-window screenshot of the same system, then remediation and verification. The state is assumed, not read.
-  They are listed in `output.notes.md`; with a key they are computed normally.
+* **Rows still provisional in the submitted `output.csv`: `case_34`, `case_35`, `case_39`, `case_50`, `case_52`, `case_53`, `case_55`, `case_61`, `case_63`** (9 of 518). Each is a deletion request whose only
+  state evidence is a screenshot. Without a key or a readings file each is answered `INCOMPLETE` with three steps: a finding on the record the data catalog ties to the user inside the window, citing the
+  in-window screenshot of the same system, then remediation and verification. The state is assumed, not read. They are listed in `output.notes.md`. **With the agent's readings file all nine are computed
+  normally and come out identical** (the assumption held in 9 of 9), so they stay provisional only because the submitted run did not use the readings.
+* **A screenshot can disagree with the rest of the data.** With the readings file exactly one other row changes, `case_45`: the security-audit screenshot lists six events (`audit_record_001` to `006`) for
+  one user, so six retained-record verifications appear instead of one. Everywhere else in the data each user has exactly one audit record (457 of 457 users; 24 of 24 sample answers), so these are
+  most likely false positives, and the readings run was **not** adopted into `output.csv`. Which of the two answers is right is a decision for the reader of the screenshot.
 * **Two heuristics exploit the timing of this dataset's synthetic events and would not be reliable on production logs.** When a deleted account or a fully anonymized analytics record carries no identifier,
   the agent finds it through the activity timeline. Two signals there are regularities of how this data was generated: inside one case the second-of-minute of each worker event keeps a fixed offset from the
   account-delete event, and an anonymization event sits 40/41 s after it. Real services have unsynchronised clocks, retries and jitter, so these offsets would not exist. They are learned only from explicitly
