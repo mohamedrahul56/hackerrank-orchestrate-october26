@@ -390,3 +390,23 @@ branch=claude/exciting-lamport-yrcfpx
 repo_root=/home/user/hackerrank-orchestrate-october26
 worktree=main
 parent_agent=none
+
+## [2026-10-24T20:13:01Z] Invariant tests, per-category golden tests, mutation check
+
+User Prompt (verbatim, secrets redacted):
+Add invariant tests that hold for every output row: phases in order, step_no consecutive, canonical sort, COMPLETE rows verification-only with evidence ids, NOT_APPLICABLE equals []. Add one golden test per policy category in deletion_rules.csv. Then do a mutation check: deliberately break three rules one at a time and show that the tests fail.
+
+Agent Response Summary:
+Added tests/test_invariants.py (independent contract tables; 550 fresh rows, the committed output.csv, the 32 gold answers and the 23 synthetic cases; a crafted bad row per invariant) and tests/test_golden_categories.py (hand-typed golden answer per category of deletion_rules.csv plus data flow, remediation order and compliant variants). Added tools/mutation_check.py which breaks one rule at a time in a scratch copy: canonical operation order (8 failing tests), COMPLETE-row evidence (7), NOT_APPLICABLE = [] (5), plus two extra mutations (REDACT mapping 6, hold expiry 1). All five killed; the control run is green. 211 tests pass.
+
+Actions:
+* Added code/tests/test_invariants.py, test_golden_categories.py, test_mutation_definitions.py, code/tools/mutation_check.py, code/evaluation/mutation_check.md; extended the ledger vocabulary in code/evaluation/extra_cases.py
+* Updated README, NOTES (section 16), CHANGELOG (row 37), INTERVIEW_PREP test count; regenerated reports; committed and pushed
+
+Context:
+tool=Claude Code
+model=claude-sonnet-5-5
+branch=claude/exciting-lamport-yrcfpx
+repo_root=/home/user/hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none

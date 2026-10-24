@@ -32,6 +32,7 @@ python3 code/evaluation/main.py                     # run the samples and print 
 python3 -m unittest discover -s code/tests -t code  # the test suite (needs no key; dataset-dependent tests skip without dataset/)
 python3 code/evaluation/evaluation_report.py        # regenerate code/evaluation/evaluation_report.md
 python3 code/tools/determinism_check.py             # 27 runs under different hash seeds / directories / locales; output files must be byte-identical
+python3 code/tools/mutation_check.py                # break 5 rules one at a time in a scratch copy; the tests must fail for each (result: code/evaluation/mutation_check.md)
 python3 code/tools/package.py --dry-run             # check and list what code.zip would contain; without --dry-run it writes code.zip
 ```
 

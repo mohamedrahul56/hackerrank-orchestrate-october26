@@ -1,7 +1,7 @@
 # Interview preparation - Ghost Data Still Exists deletion-audit agent
 
 Every number below is from this repository's own reports (`code/evaluation/evaluation_report.md`, `phase3_results.md`, `phase4_results.md`, `CHANGELOG.md`) or from `output.csv`;
-where something was not measured, this document says so. Test count at the time of writing: **180 tests, all passing**.
+where something was not measured, this document says so. Test count at the time of writing: **211 tests, all passing**.
 
 ## 1. The two-minute architecture explanation
 
