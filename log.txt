@@ -410,3 +410,147 @@ branch=claude/exciting-lamport-yrcfpx
 repo_root=/home/user/hackerrank-orchestrate-october26
 worktree=main
 parent_agent=none
+
+## [2026-10-24T20:48:40Z] Profile the run, index only the quadratic work, benchmark
+
+User Prompt (verbatim, secrets redacted):
+Profile the full run: time per stage and peak memory. Then build an index structure only where profiling shows quadratic work, and benchmark on the real 518 cases and on a scaled-up input made by repeating the request rows 20x. Report real timings and the observed growth. State plainly what is not scaled: this is a batch auditor, not a service.
+
+Agent Response Summary:
+Added code/tools/profile_run.py (stage timers, peak RSS, cProfile, scaled inputs, medians of 3 runs) and indexed only the timeline discovery, the one stage whose cost per request grew with the input. Output sha256 is identical before and after at x1, x2, x5, x10, x20 and x40. Measured: whole run 10.13 s before and 4.58 s after at x20, 25.92 s and 9.21 s at x40. The report states what was not scaled (evidence, activity, identities, model latency; batch auditor, not a service).
+
+Actions:
+* Edited code/auditor/discover.py and audit.py (time indexes, claimant index, heap, memoization, sorted policy actions, cohort index)
+* Added code/tools/profile_run.py and code/evaluation/performance_report.py; generated code/evaluation/performance_report.md from benchmark runs on a checkout of the previous commit and on the current code
+* Updated NOTES (section 17), CHANGELOG (row 38)
+
+Context:
+tool=Claude Code
+model=claude-sonnet-5-5
+branch=claude/exciting-lamport-yrcfpx
+repo_root=/home/user/hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none
+
+## [2026-10-24T20:48:40Z] Resumable per-case checkpoint
+
+User Prompt (verbatim, secrets redacted):
+Write per-case results incrementally so a killed run can resume without recomputing finished cases, keyed by input hash plus config and rules versions. Test: kill mid-run, resume, and confirm the final output.csv hash matches a clean run.
+
+Agent Response Summary:
+Added code/auditor/checkpoint.py: finished cases are appended to <out>.partial.jsonl with a per-line checksum; the run key hashes the dataset files, requests file, pipeline/rules/prompt/code versions, settings and screenshot readings. tests/test_resume.py kills a real run with SIGKILL after 200 cases, resumes, and requires identical output.csv and notes sha256. The test found that sorting keys in stored lines changed steps_json key order; fixed.
+
+Actions:
+* Added code/auditor/checkpoint.py, code/tests/test_resume.py; wired --restart and --keep-checkpoint into code/main.py
+* Updated NOTES (section 18), CHANGELOG (row 39), .gitignore
+
+Context:
+tool=Claude Code
+model=claude-sonnet-5-5
+branch=claude/exciting-lamport-yrcfpx
+repo_root=/home/user/hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none
+
+## [2026-10-24T20:48:40Z] Version stamps, settings file, cache key
+
+User Prompt (verbatim, secrets redacted):
+Stamp pipeline, rules-file and prompt versions into output.notes.md and into the LLM cache key. Move tunable settings into one config file with documented defaults, with CLI overrides. Add a test that a version change invalidates the cache.
+
+Agent Response Summary:
+Added code/auditor/versions.py and code/auditor/settings.py with code/config/settings.toml (every setting documented; defaults equal the built-in ones), --config, --set and --show-settings. The stamp is written at the top of output.notes.md and into the usage run_info; the LLM cache key now includes the prompt text digest, pipeline version and rules digest. Seven tests show each version change is a cache miss.
+
+Actions:
+* Added code/auditor/versions.py, settings.py, config/settings.toml, tests/test_versions_settings.py
+* Edited llm.py, audit.py, discover.py, main.py
+* Updated NOTES (section 19), CHANGELOG (row 40), README
+
+Context:
+tool=Claude Code
+model=claude-sonnet-5-5
+branch=claude/exciting-lamport-yrcfpx
+repo_root=/home/user/hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none
+
+## [2026-10-24T20:48:40Z] Bounded concurrent image reads
+
+User Prompt (verbatim, secrets redacted):
+Add bounded concurrent image reads with rate-limit backoff and stable output order. Test with a fake client for success, 429, timeout and invalid JSON.
+
+Agent Response Summary:
+Added code/auditor/evidence/imagejobs.py (thread pool bounded by llm.max_concurrency, results applied in manifest order) and extended llm.py (shared pause after a 429 honouring Retry-After, per-request timeout, locked usage log, atomic cache writes, one call for a duplicate image). tests/test_image_concurrency.py (18 tests, repeated 15 times without a failure) covers success, 429, timeout, invalid JSON and a mix giving identical output sequentially and concurrently. No real model was called.
+
+Actions:
+* Added evidence/imagejobs.py and tests/test_image_concurrency.py; edited evidence/load.py, llm.py, settings.py, config/settings.toml
+* Updated NOTES (section 20), CHANGELOG (row 41)
+
+Context:
+tool=Claude Code
+model=claude-sonnet-5-5
+branch=claude/exciting-lamport-yrcfpx
+repo_root=/home/user/hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none
+
+## [2026-10-24T20:48:40Z] Makefile and README quick start, verified on a clean clone
+
+User Prompt (verbatim, secrets redacted):
+Add a Makefile (or scripts) with test, run, score, explain, package and check targets, and update the README quick start. Verify each target on a clean clone.
+
+Agent Response Summary:
+Added a Makefile (help setup test run score explain package check bench clean) and a README quick start. Every target was run in a fresh git clone of the committed tree; the clone found two defects (the example case id case_1 does not exist; make check failed because code.zip is git-ignored and was never built), both fixed and guarded by tests.
+
+Actions:
+* Added Makefile; edited README.md, code/tools/package.py, code/tools/final_check.py
+* Ran help, setup, test, run, score, explain, package, check, bench, clean in a clean clone
+* CHANGELOG (row 42)
+
+Context:
+tool=Claude Code
+model=claude-sonnet-5-5
+branch=claude/exciting-lamport-yrcfpx
+repo_root=/home/user/hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none
+
+## [2026-10-24T20:48:40Z] ARCHITECTURE.md
+
+User Prompt (verbatim, secrets redacted):
+Write ARCHITECTURE.md: a mermaid data-flow diagram, a module responsibility table, the failure-modes table, measured performance numbers from task 6, and short decision records for the key choices (deterministic core, omit-when-unsure, timing heuristics and their risk, no-link-no-step). Use only measured numbers.
+
+Agent Response Summary:
+Wrote ARCHITECTURE.md with the diagram, module table, failure-mode table (each row names its test), the measured wall-time table copied from the generated performance report and checked against it by a test, and four decision records quoting only numbers from the evaluation and performance reports. Writing it exposed two untested failure rows and a broken hold-out tool; tests added and the tool repaired. A README claim about a model tie-break that main.py never enables was corrected.
+
+Actions:
+* Added ARCHITECTURE.md, tests/test_architecture.py, tests/test_failure_modes.py; repaired code/evaluation/holdout.py
+* Updated README, evaluation_report.py wording, CHANGELOG (row 43)
+
+Context:
+tool=Claude Code
+model=claude-sonnet-5-5
+branch=claude/exciting-lamport-yrcfpx
+repo_root=/home/user/hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none
+
+## [2026-10-24T20:50:36Z] Run everything, confirm the hash, refresh reports, rebuild zip, final_check
+
+User Prompt (verbatim, secrets redacted):
+Run everything, confirm the hash, refresh the reports from the real outputs, rebuild the zip, and run final_check.py
+
+Agent Response Summary:
+Ran the full test suite (274 tests, 0 failures), the mutation check (5 of 5 killed), the 27-run determinism check (output.csv, output.notes.md and output.usage.jsonl each 1 distinct hash) and a fresh full run: output.csv sha256 4676156fad..., byte-identical to the committed file and to the hash before this session's changes. Regenerated the baseline, coverage, extra-case, phase, usage and evaluation reports from the real outputs, rebuilt code.zip and ran code/tools/final_check.py after committing and pushing (its result is reported in the chat reply, because it is run after this entry is written).
+
+Actions:
+* Ran unittest discover, tools/mutation_check.py, tools/determinism_check.py, main.py, evaluation/{baseline,coverage,extra_cases,phase2_report,phase3_report,phase4_report,usage_report,evaluation_report}.py
+* Rebuilt code.zip with tools/package.py via final_check.py --build-zip
+* Updated INTERVIEW_PREP test count (274); committed and pushed
+
+Context:
+tool=Claude Code
+model=claude-sonnet-5-5
+branch=claude/exciting-lamport-yrcfpx
+repo_root=/home/user/hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none

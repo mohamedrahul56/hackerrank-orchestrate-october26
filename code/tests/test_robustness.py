@@ -232,7 +232,7 @@ class ModelFailures(unittest.TestCase):
 
     def test_corrupt_cache_entry_is_just_a_miss(self):
         llm = self.llm([reply(GOOD)])
-        key = llm._key(__import__("hashlib").sha256(self.img.read_bytes()).hexdigest(), imageobs.PROMPT_VERSION, llm.model, imageobs.SCHEMA)
+        key = llm.cache_key(__import__("hashlib").sha256(self.img.read_bytes()).hexdigest(), imageobs.PROMPT_VERSION, llm.model, imageobs.SCHEMA, imageobs.SYSTEM, imageobs.INSTRUCTION)
         (self.dir / "cache").mkdir()
         (self.dir / "cache" / f"{key}.json").write_text("{corrupt", encoding="utf-8")
         self.assertEqual(self.read(llm)["screen"], "connector console")

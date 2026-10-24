@@ -58,7 +58,7 @@ def _account_truth(aud) -> dict[str, str]:
         ex = explicit.get(c.case_id)
         if ex and len(ex) == 1:
             a = next(iter(ex))
-            if any(dsc._in_window(e, c.reported_at, dsc.ACCOUNT_WINDOW) for e in dele.get(a, [])):
+            if any(dsc._in_window(e, c.reported_at, aud.cfg.tune.account_window) for e in dele.get(a, [])):
                 out[c.case_id] = a
     return out
 
@@ -78,7 +78,7 @@ def account_holdout(aud, fraction: float, seeds: range, use_cohort: bool = False
             ow2[acct] = ow2.get(acct, set()) - set(keys[h].users)
             if not ow2[acct]:
                 del ow2[acct]
-        out = dsc.assign_accounts(cases, aud.events, ex2, ow2, cohort if use_cohort else None, own if use_timing_heuristics else None)
+        out = dsc.assign_accounts(cases, aud.events, ex2, ow2, cohort if use_cohort else None, own if use_timing_heuristics else None, aud.cfg.tune)
         taker_of = {a.resource: cid for cid, a in out.items() if a.resource and a.how != "explicit"}
         for h in hold:
             a, truth = out[h], truth_all[h]
@@ -97,7 +97,7 @@ def account_holdout(aud, fraction: float, seeds: range, use_cohort: bool = False
 
 def analytics_holdout(aud, fraction: float, seeds: range, use_timing_heuristics: bool = True) -> HoldoutResult:
     """Hide the chain-resolved analytics assignments (the most reliable ones) and see whether the phase / elimination stages recover them."""
-    cs, ev, anon, chain, foreign, acct_t = aud.analytics_inputs
+    cs, ev, anon, chain, foreign, acct_t, tune = aud.analytics_inputs
     truth_all = {cid: a.resource for cid, a in aud.analytics_asg.items() if a.how == "chain"}
     res = HoldoutResult()
     if not truth_all:
@@ -106,7 +106,7 @@ def analytics_holdout(aud, fraction: float, seeds: range, use_timing_heuristics:
         rnd = random.Random(seed)
         hold = sorted(rnd.sample(sorted(truth_all), max(1, int(fraction * len(truth_all)))))
         ch = {k: ([] if k in hold else v) for k, v in chain.items()}
-        out = dsc.assign_anonymized_analytics(cs, ev, anon, ch, foreign, acct_t if use_timing_heuristics else None)
+        out = dsc.assign_anonymized_analytics(cs, ev, anon, ch, foreign, acct_t if use_timing_heuristics else None, tune)
         taker_of = {a.resource: cid for cid, a in out.items() if a.resource}
         for h in hold:
             a, truth = out[h], truth_all[h]

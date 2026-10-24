@@ -1,0 +1,55 @@
+# Tunable settings of the deletion-audit agent. Every value shown is the built-in default: deleting this file changes nothing.
+#
+# Precedence (low -> high): built-in defaults < this file < environment (AUDITOR_VLM_MODEL, AUDITOR_VLM_FALLBACK_MODEL, AUDITOR_CACHE_DIR)
+#                           < command line (--config FILE to use another file, --set section.key=value to override one value,
+#                             or the dedicated flags such as --no-discovery).
+# Unknown sections/keys and wrongly typed values stop the run with an error. Run `python3 code/main.py --show-settings` to see the effective values.
+#
+# Settings that can change the answer (everything except cache_dir, max_concurrency and timeout_seconds) are hashed into the run stamp in output.notes.md and into the
+# resume key of a checkpointed run, so results of one setting are never reused for another.
+
+[pipeline]
+# Evidence captured AFTER audit_at may tie a resource to the user (identifier match only). It never gives a state and is never cited.
+later_linking = true
+# Find accounts / analytics records that carry no identifier through the deletion worker's activity timeline.
+discovery = true
+# Two second-of-minute heuristics used by discovery. They exploit this dataset's synthetic event timing and would not hold on
+# production logs (README "Known weaknesses"); false = timeline rules only.
+timing_heuristics = true
+# Ablation only: narrow ambiguous accounts by the cohort snapshot. Measured harmful on the hold-out (precision 85% vs 100%).
+cohort_filter = false
+# A deletion request whose only state evidence is an unread screenshot gets a provisional INCOMPLETE row instead of NOT_APPLICABLE.
+provisional_rows = true
+
+[discovery]
+# Minutes relative to the case's reported_at in which the worker's account-delete event is looked for: [from, to].
+account_window_minutes = [-90, 15]
+# Same for the analytics anonymization event.
+analytics_window_minutes = [-45, -5]
+# Log-likelihood lead (about 7:1 at 2.0) an account's second-of-minute offset needs over the runner-up. Hold-out precision was 100% for 1.0-3.0.
+phase_margin = 2.0
+# Log-likelihood an analytics candidate's offset must reach (about 7:1 at 2.0).
+analytics_min_llr = 2.0
+# Seconds between consecutive deletion-worker policy actions (measured: 71 of 72 gaps are one of these two values).
+chain_gaps_seconds = [390, 449]
+# Allowed deviation, in seconds, when a gap is matched against the two values above.
+chain_tolerance_seconds = 2.0
+
+[audit]
+# Evidence captured later than audit_at + this many days may not be used to link a resource to the user.
+later_link_max_days = 7
+
+[llm]
+# Screenshots: auto = read them with the vision model only when ANTHROPIC_API_KEY is set; on; off. The key itself is never a setting.
+images = "auto"
+# Vision model that reads the screenshots (env: AUDITOR_VLM_MODEL).
+model = "claude-haiku-5-5"
+# Used only when the first model fails schema validation twice (env: AUDITOR_VLM_FALLBACK_MODEL).
+fallback_model = "claude-sonnet-5-5"
+# Directory of the on-disk model cache ("" = code/.cache/llm). Not part of the fingerprint.
+cache_dir = ""
+# Screenshots read at the same time (1..16; 1 = one after the other). Replies are applied in manifest order, so this changes the wall time only.
+# After a 429 every worker pauses (the server's Retry-After, else 1, 2, 4 s), so a higher number cannot make a rate limit worse.
+max_concurrency = 4
+# Seconds before one model request is given up; a timeout is retried like a 429, up to 4 tries per call.
+timeout_seconds = 60.0

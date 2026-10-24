@@ -15,7 +15,10 @@ from __future__ import annotations
 
 import csv
 import logging
+import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
+from bisect import bisect_left, bisect_right
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -28,6 +31,7 @@ from .evidence.records import EvidenceBase, Obs, system_for
 from .identity import IdentityResolver
 from .link import Linker
 from .policy import PolicyEngine
+from .settings import Settings, Tunables
 from .schema import canonicalize, make_step
 from .state import ResourceState, resolve, usable
 from .trace import Trace
@@ -38,7 +42,6 @@ log = logging.getLogger("auditor")
 CHAIN_POSITION = {"REDACT_RECORD": 1, "DISABLE_DATA_FLOW": 2, "BLOCK_RESTORE": 3}
 # A resource first seen up to this long AFTER audit_at may still be linked to the case (a later snapshot of the same
 # cohort: 2 days in every sample where it happens). Evidence from other scenarios of the same person is months away.
-LATER_LINK_MAX_DAYS = 7
 
 
 @dataclass
@@ -58,23 +61,36 @@ class Config:
     provisional_rows: bool = True         # deletion request whose only state evidence is an unread screenshot -> provisional INCOMPLETE row instead of NOT_APPLICABLE
     use_cohort_filter: bool = False       # measured harmful by hold-out (precision 86% vs 100%): kept only as an ablation switch
     use_timing_heuristics: bool = True   # the two second-of-minute heuristics (accounts: PhaseModel offsets; analytics: the 40/41 s offset). Dataset-specific, see README/NOTES 12
+    tune: Tunables = field(default_factory=Tunables)   # numbers of the discovery and the late-link rule (config/settings.toml)
+    image_workers: int = 1                # concurrent model calls when reading screenshots (output order is unaffected)
     classifier_llm: object | None = None
     image_extractor: object | None = None
+
+
+    @classmethod
+    def from_settings(cls, s: Settings, **kw) -> "Config":
+        return cls(allow_later_linking=s.later_linking, use_discovery=s.discovery, provisional_rows=s.provisional_rows, use_cohort_filter=s.cohort_filter,
+                   use_timing_heuristics=s.timing_heuristics, tune=s.tune, image_workers=s.max_concurrency, **kw)
 
 
 class Auditor:
     def __init__(self, root: Path, config: Config | None = None, requests_files: tuple[str, ...] = ("deletion_requests.csv", "sample_deletion_requests.csv")):
         self.root, self.cfg = root, config or Config()
-        self.res = IdentityResolver(root)
-        self.base: EvidenceBase = load_evidence(root, include_images=self.cfg.image_extractor is not None, image_extractor=self.cfg.image_extractor)
-        self.catalog = catalog_rows(root)
-        self.manifest = manifest_rows(root)
-        self.link = Linker(self.base, self.res, self.catalog)
+        self.timings: dict[str, float] = {}                  # seconds per start-up stage (tools/profile_run.py reads it; nothing else does)
+        with self._stage("identity"):
+            self.res = IdentityResolver(root)
+        with self._stage("evidence_parse"):
+            self.base: EvidenceBase = load_evidence(root, include_images=self.cfg.image_extractor is not None, image_extractor=self.cfg.image_extractor, image_workers=self.cfg.image_workers)
+        with self._stage("link"):
+            self.catalog = catalog_rows(root)
+            self.manifest = manifest_rows(root)
+            self.link = Linker(self.base, self.res, self.catalog)
         self.policy = PolicyEngine(root / "deletion_rules.csv")
-        self.events = dsc.load_events(root)
-        self.events_by_resource: dict[str, list[dsc.Event]] = {}
-        for e in self.events:
-            self.events_by_resource.setdefault(e.resource, []).append(e)
+        with self._stage("activity_index"):
+            self.events = dsc.load_events(root)
+            self.events_by_resource: dict[str, list[dsc.Event]] = {}
+            for e in self.events:
+                self.events_by_resource.setdefault(e.resource, []).append(e)
         self.requests: dict[str, Request] = {}
         self.bad_requests: dict[str, str] = {}               # case_id -> why the row cannot be audited (answered with a fallback row)
         for f in requests_files:
@@ -85,13 +101,24 @@ class Auditor:
                 for b in bad:
                     if b.case_id and not b.reason.startswith("duplicate"):
                         self.bad_requests.setdefault(b.case_id, b.reason)
-        self.classification = {cid: classify_request(r.request_text, self.cfg.classifier_llm) for cid, r in self.requests.items()}
-        self.users: dict[str, set[str]] = {cid: {p.user_id for p in self.res.resolve(r.email, r.requested_at)} for cid, r in self.requests.items()}
+        with self._stage("classify_requests"):
+            self.classification = {cid: classify_request(r.request_text, self.cfg.classifier_llm) for cid, r in self.requests.items()}
+        with self._stage("resolve_identities"):
+            self.users: dict[str, set[str]] = {cid: {p.user_id for p in self.res.resolve(r.email, r.requested_at)} for cid, r in self.requests.items()}
         self.account_asg: dict[str, dsc.Assignment] = {}
         self.known_accounts: dict[str, set[str]] = {}
         self.analytics_asg: dict[str, dsc.Assignment] = {}
         if self.cfg.use_discovery:
-            self._discover()
+            with self._stage("discovery_total"):
+                self._discover()
+
+    @contextmanager
+    def _stage(self, name: str):
+        t0 = time.perf_counter()
+        try:
+            yield
+        finally:
+            self.timings[name] = self.timings.get(name, 0.0) + time.perf_counter() - t0
 
     # ------------------------------------------------------------------ global discovery (needs every case)
     def _case_files(self, cid: str) -> set[str]:
@@ -105,6 +132,11 @@ class Auditor:
 
     def _discover(self) -> None:
         cases, explicit, cohort, chain = [], {}, {}, {}
+        profiles_in: dict[str, set[str]] = {}                    # file_id -> USER_PROFILE resources it observes (one pass instead of one per case)
+        for o in self.base.obs:
+            if o.category == "USER_PROFILE":
+                profiles_in.setdefault(o.file_id, set()).add(o.resource)
+        t_inputs = time.perf_counter()
         for cid, r in self.requests.items():
             if self.classification[cid].label != DELETION or not self.users[cid]:
                 continue
@@ -114,10 +146,10 @@ class Auditor:
                 linked = {x for x in linked if self.link.link_ids_before(x, self.users[cid], r.audit_at)}
             observed = {x for x in linked if x.startswith("account_")
                         and any(usable(o, r.requested_at, r.audit_at) for o in self.link.by_resource.get(x, []))}
-            explicit[cid] = dsc.known_accounts(linked, observed, self.events_by_resource, r.reported_at)
+            explicit[cid] = dsc.known_accounts(linked, observed, self.events_by_resource, r.reported_at, self.cfg.tune)
             self.known_accounts[cid] = explicit[cid]
             files = self._case_files(cid)
-            cohort[cid] = {o.resource for o in self.base.obs if o.category == "USER_PROFILE" and o.file_id in files}
+            cohort[cid] = set().union(*(profiles_in.get(f, ()) for f in files))
             ch = []
             for x in linked:
                 for e in self.events_by_resource.get(x, []):
@@ -129,10 +161,15 @@ class Auditor:
         for (rid, uid) in self.link.links:
             if rid.startswith("account_"):
                 owners.setdefault(rid, set()).add(uid)
-        own = {c.case_id: self._own_events(c) for c in cases} if self.cfg.use_timing_heuristics else None
+        self.timings["discovery.case_inputs"] = time.perf_counter() - t_inputs
+        with self._stage("discovery.own_events"):
+            own = {c.case_id: self._own_events(c) for c in cases} if self.cfg.use_timing_heuristics else None
         self.disc_inputs = (cases, explicit, owners, cohort, own)         # kept for the hold-out measurement (evaluation/holdout.py)
-        self.account_asg = dsc.assign_accounts(cases, self.events, explicit, owners, cohort if self.cfg.use_cohort_filter else None, own)
+        with self._stage("discovery.assign_accounts"):
+            self.account_asg = dsc.assign_accounts(cases, self.events, explicit, owners, cohort if self.cfg.use_cohort_filter else None, own, self.cfg.tune)
+        t_ana = time.perf_counter()
         anonymized = {o.resource for o in self.base.obs if o.category == "ANALYTICS_PROFILE" and o.state == "ANONYMIZED" and not o.idents}
+        self._chain_times, self._chain_hits = None, {}
         self.chain_events = []                                   # every completed policy action that belongs to some known user
         for rid, evs in self.events_by_resource.items():
             owners = set(self.link.resource_users.get(rid, ()))
@@ -141,8 +178,9 @@ class Auditor:
                     self.chain_events.append((e.t, CHAIN_POSITION[e.event_type], owners))
         has_own = {c.case_id for c in cases if any(x.startswith("analytics_") for x in self.link.resources_of(set(c.users)))}
         account_time = {cid: a.event.t for cid, a in self.account_asg.items() if a.resource and a.event is not None} if self.cfg.use_timing_heuristics else None
-        self.analytics_inputs = ([c for c in cases if c.case_id not in has_own], self.events, anonymized, chain, self._foreign_chain, account_time)
+        self.analytics_inputs = ([c for c in cases if c.case_id not in has_own], self.events, anonymized, chain, self._foreign_chain, account_time, self.cfg.tune)
         self.analytics_asg = dsc.assign_anonymized_analytics(*self.analytics_inputs)
+        self.timings["discovery.analytics"] = time.perf_counter() - t_ana
 
     def _own_events(self, c: "dsc.CaseKey") -> list["dsc.Event"]:
         """Activity events on the case's linked resources around its reported_at (timing only, never state)."""
@@ -155,11 +193,16 @@ class Auditor:
 
     def _foreign_chain(self, case: "dsc.CaseKey", e: "dsc.Event") -> bool:
         """True when e is followed by another user's completed policy actions at chain spacing (a decoy user's deletion)."""
-        for t, k, owners in self.chain_events:
-            d = (t - e.t).total_seconds()
-            if 0 < d < 1500 and dsc.chain_ok(d, k) and not (owners & case.users):
-                return True
-        return False
+        if self._chain_times is None:                            # sorted once; each event then looks only at the 25 minutes after it
+            self.chain_events.sort(key=lambda x: x[0])
+            self._chain_times = [x[0] for x in self.chain_events]
+        hit = self._chain_hits.get(e.activity_id)
+        if hit is None:
+            lo = bisect_right(self._chain_times, e.t)                              # first chain event strictly after e
+            hi = bisect_left(self._chain_times, e.t + timedelta(seconds=1500))     # first one 1500 s or more after e
+            hit = self._chain_hits[e.activity_id] = [owners for t, k, owners in self.chain_events[lo:hi]
+                                                     if dsc.chain_ok((t - e.t).total_seconds(), k, self.cfg.tune)]
+        return any(not (owners & case.users) for owners in hit)
 
     # ------------------------------------------------------------------ one case
     def audit(self, case_id: str) -> CaseResult:
@@ -251,7 +294,7 @@ class Auditor:
                 continue
             first = min((o.file_t for o in self.link.by_resource.get(rid, [])), default=None)
             deleted_in_window = rid in self.known_accounts.get(case_id, ())     # linked to the user AND deleted by the worker in the window
-            if how != "explicit" or deleted_in_window or (first is not None and t0 <= first <= audit_at + timedelta(days=LATER_LINK_MAX_DAYS)):
+            if how != "explicit" or deleted_in_window or (first is not None and t0 <= first <= audit_at + timedelta(days=self.cfg.tune.later_link_max_days)):
                 unobserved_accounts.append(rid)
         # other linked resources with no state evidence in the window that first appear at/after the request (e.g. a retained
         # audit record seen only in a later snapshot of the cohort): their END state is still a required check, with no citation
@@ -261,7 +304,7 @@ class Auditor:
                 continue
             seen = self.link.by_resource.get(rid, [])
             first = min((o.file_t for o in seen), default=None)
-            if first is not None and t0 <= first <= audit_at + timedelta(days=LATER_LINK_MAX_DAYS):
+            if first is not None and t0 <= first <= audit_at + timedelta(days=self.cfg.tune.later_link_max_days):
                 unobserved_linked.append((rid, max(seen, key=lambda o: o.file_t)))
 
         status = "INCOMPLETE" if violations else "COMPLETE"

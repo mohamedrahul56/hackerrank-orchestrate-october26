@@ -1,7 +1,7 @@
 # Interview preparation - Ghost Data Still Exists deletion-audit agent
 
 Every number below is from this repository's own reports (`code/evaluation/evaluation_report.md`, `phase3_results.md`, `phase4_results.md`, `CHANGELOG.md`) or from `output.csv`;
-where something was not measured, this document says so. Test count at the time of writing: **211 tests, all passing**.
+where something was not measured, this document says so. Test count at the time of writing: **274 tests, all passing**.
 
 ## 1. The two-minute architecture explanation
 
@@ -153,3 +153,11 @@ three Phase 2 assignments were revoked. Sample recall rose from 95.9% to 97.4% w
 Sorted iteration, plain-string tie-breaks, compact JSON, fixed zip metadata; no randomness except seeded hold-out samples. Two runs of `main.py` give identical bytes (checked in `phase4_results.md` and the evaluation report).
 For the model: responses are cached on disk by (file sha256, prompt version, model, schema), so a warm rerun is identical and costs nothing; a cleared-cache rerun would measure run-to-run variance. That last step is
 tested with a fake client only; it is not measured.
+
+## 6. Operations follow-ups (added after the Phase 5 checkpoint; numbers in `evaluation/performance_report.md`, design in `../ARCHITECTURE.md`)
+
+* **What was slow and what did you do?** Profiling found one stage that grew faster than the input: the timeline discovery (16.95 s of a 25.92 s run at 40x the requests). I added time indexes, an inverted claimant index and a heap there only; the run fell to 9.21 s (discovery 0.78 s) and the output file is byte-identical at every scale. Stages that were already linear got nothing.
+* **Is it scalable?** It is a batch auditor, not a service. I scaled only the number of requests (repeated rows, not independent data). Evidence, activity and identity tables were not scaled, the whole dataset lives in memory in one process, discovery needs all cases at once, and vision-model latency was not measured.
+* **What happens if the run is killed?** Finished cases are on disk with checksums; the next run with the same inputs, versions and settings audits only the missing ones and writes the same bytes (tested by SIGKILL and comparing sha256). A checkpoint made for anything else is discarded.
+* **How do you know a cached model reading is still valid?** The cache key contains the image, prompt label and text digest, model, schema, pipeline version and rules digest; changing any of them is a miss (tested).
+* **What if the API rate-limits you?** Backoff 1, 2, 4 s or the server's `Retry-After` (capped at 60 s), shared by all workers; after four tries the image is reported as not read and the affected requests get provisional rows. Tested with a fake client only; no real model was called.

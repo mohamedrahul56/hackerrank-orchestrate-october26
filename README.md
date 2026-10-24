@@ -5,8 +5,25 @@ every copy of their data at `audit_at`, applies `dataset/deletion_rules.csv`, an
 an ordered remediation plan and verification checks) or `NOT_APPLICABLE` (`[]`). The challenge contract is in `problem_statement.md` / `AGENTS.md` (not repeated here).
 
 **Principle: the model describes, deterministic code decides.** All statuses and steps come from code. The only model use is optional: turning the 11 PNG screenshots into schema-validated
-JSON facts, and breaking a tie on a request whose wording the rule-based classifier calls ambiguous. **The submitted `output.csv` was produced without any model call**
+JSON facts. (`classify.py` also has a hook for a model tie-break on ambiguous request wording; the command line does not enable it, so ambiguous wording is `NOT_APPLICABLE`.) **The submitted `output.csv` was produced without any model call**
 (no API key was available when it was generated; see "Known weaknesses").
+
+## Quick start
+
+```bash
+git clone <this repository> && cd <it>
+make setup                      # pip install -r code/requirements.txt   (pypdf; anthropic is used only when ANTHROPIC_API_KEY is set)
+make test                       # the whole test suite; needs no key and no network
+make run                        # all 518 requests -> ./output.csv  (+ output.notes.md, output.usage.jsonl)
+make score                      # the 32 labeled sample requests and the score report
+make explain CASE=case_48       # how one case got its answer; read-only, writes nothing
+make package                    # check every submission rule and write ./code.zip
+make check                      # build code.zip and run the final submission checklist
+```
+
+`make` alone lists the targets. Without `make` (for example on Windows) run the command each target wraps; they are the first lines of the `Makefile`: `python3 code/main.py`, `python3 -m unittest discover -s code/tests -t code`,
+`python3 code/evaluation/main.py`, `python3 code/main.py --explain case_48`, `python3 code/tools/package.py --require-final`, `python3 code/tools/final_check.py --build-zip`.
+Design, failure modes and measured performance: [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Setup and run
 
@@ -22,6 +39,8 @@ Tested on Python 3.13. Reading is limited to `dataset/`; nothing else is read. T
 | `--requests sample_deletion_requests.csv --out code/out/pred_samples.csv` | run the 32 labeled samples |
 | `--images auto` (default) / `on` / `off` | read the PNG evidence with a vision model; `auto` = only when `ANTHROPIC_API_KEY` is set |
 | `--explain CASE_ID` | print how that one case got its answer (identity, evidence per resource with the one used, the rule, why each step exists or is left out) and exit; read-only: writes no `output.csv`, notes or usage log; screenshots are read only with `--images on` |
+| `--config FILE`, `--set section.key=value` | settings file (default `code/config/settings.toml`, every setting documented there) and one-value overrides; precedence: defaults, file, environment, `--set`, the dedicated flags below; `--show-settings` prints the effective values and the version stamp |
+| `--restart`, `--keep-checkpoint` | finished cases are appended to `output.partial.jsonl` while the run goes; after a kill the next run with the same inputs, versions and settings audits only the missing cases and writes the same bytes; `--restart` ignores the file, `--keep-checkpoint` keeps it after success |
 | `--no-timing-heuristics` | switch off the two second-of-minute heuristics (see "Known weaknesses") |
 | `--no-discovery`, `--no-later-linking` | ablations |
 
@@ -59,7 +78,7 @@ llm.py         --> the only module that talks to a model: cache, retries, schema
 ```
 
 Key rules: evidence captured **after** `audit_at` may only tie a resource to a user (never state, never cited; every use is logged); workflow statuses and activity results are claims, never proof;
-every text in a request or evidence file is data (no model sees it except the optional validated tie-breaker); a step is omitted rather than guessed when the evidence cannot separate candidates.
+every text in a request or evidence file is data (no model reads request or evidence text; the optional vision model only describes screenshots); a step is omitted rather than guessed when the evidence cannot separate candidates.
 
 ## Design decisions and rejected alternatives
 
@@ -95,7 +114,7 @@ The 32 labels were all read in Phase 0 to infer the rules, so none of these numb
 * 27 deletion rows lack an account verification step, and 28 rows have an anonymized-analytics record whose owner cannot be separated from another case's; both are omitted on purpose (nothing separates the candidates).
 * Policy categories without a labeled sample (cache, delivery log, telemetry, marketing, secondary identifier, attachments, legal-hold exposure) are verified only by the synthetic cases; the redaction shape for an
   exposed legal-hold record is an assumption.
-* Classifier lexicons cover eight languages; other languages fall back to the (fake-tested) model tie-breaker or to `NOT_APPLICABLE`.
+* Classifier lexicons cover eight languages; other languages end as `NOT_APPLICABLE` (a model tie-break hook exists in `classify.py`, but `main.py` does not enable it and it is tested only with a fake client).
 
 ## Repository layout
 

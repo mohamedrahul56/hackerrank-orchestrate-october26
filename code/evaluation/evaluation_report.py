@@ -212,7 +212,7 @@ def main() -> int:
           "* **The second-of-minute heuristics exploit regularities of this dataset's synthetic event timing and would not be reliable on production logs.** They can be switched off with "
           "`--no-timing-heuristics`; section 5 shows what that costs (step F1 on the samples, rows without an account step).",
           "* The legal-hold exposed-identifier shape and every category without a labeled sample are verified only by the synthetic cases.",
-          "* Classifier lexicons cover eight languages; other languages end as ambiguous and fall back to a validated model tie-breaker (fakes only) or NOT_APPLICABLE.",
+          "* Classifier lexicons cover eight languages; other languages end as ambiguous and therefore NOT_APPLICABLE (a model tie-break hook exists in `classify.py` but `main.py` does not enable it; tested with a fake client only).",
           "* Constants (time windows, chain gaps, margins) were set from the labeled data; they are documented and unit-tested.", ""]
 
     # ------------------------------------------------------------------ 9. determinism, robustness, tests

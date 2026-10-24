@@ -11,3 +11,4 @@ code/config/prices.json
 agent-trace/
 agent-trace.zip
 *.usage.jsonl
+*.partial.jsonl

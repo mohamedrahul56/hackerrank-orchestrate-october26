@@ -19,7 +19,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from auditor import settings as cfgmod  # noqa: E402
+from auditor import versions  # noqa: E402
 from auditor.audit import Auditor, Config  # noqa: E402
+from auditor.checkpoint import Checkpoint, audit_all, image_observation_digest, run_key  # noqa: E402
 from auditor.dataset import DatasetError, load_dataset  # noqa: E402
 from auditor.outio import write_output  # noqa: E402
 from auditor.validate import validate_output_file  # noqa: E402
@@ -33,13 +36,18 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
 
-def _explain(a, cfg) -> int:
+def _make_llm(st, stamp, usage_path):
+    from auditor.llm import LLM
+    return LLM(cache_dir=Path(st.cache_dir) if st.cache_dir else None, usage_path=usage_path, model=st.model, fallback_model=st.fallback_model, stamp=stamp,
+               timeout_s=st.timeout_seconds)
+
+
+def _explain(a, cfg, st, stamp) -> int:
     """--explain: build the auditor exactly as a normal run does, print the explanation, write nothing (no output.csv, notes or usage log)."""
     from auditor.explain import explain
-    if a.images == "on":
+    if st.images == "on":
         import tempfile
-        from auditor.llm import LLM
-        llm = LLM(usage_path=Path(tempfile.mkdtemp()) / "explain_usage.jsonl")          # the usage of an explanation is not part of any run's log
+        llm = _make_llm(st, stamp, Path(tempfile.mkdtemp()) / "explain_usage.jsonl")          # the usage of an explanation is not part of any run's log
         cfg.image_extractor = lambda path, system, instruction, schema, version: llm.read_image_json("image", path, system, instruction, schema, version)
     auditor = Auditor(a.dataset, cfg)
     try:
@@ -56,35 +64,59 @@ def _run(argv: list[str] | None = None) -> int:
     ap.add_argument("--dataset", type=Path, default=ROOT / "dataset")
     ap.add_argument("--requests", default="deletion_requests.csv", help="file inside --dataset with the cases to answer")
     ap.add_argument("--out", type=Path, default=ROOT / "output.csv")
+    ap.add_argument("--config", type=Path, default=None, metavar="FILE", help=f"settings file (TOML; default {cfgmod.DEFAULT_FILE.relative_to(ROOT)}, documented there)")
+    ap.add_argument("--set", action="append", default=[], metavar="SECTION.KEY=VALUE", dest="overrides",
+                    help="override one setting, e.g. --set discovery.phase_margin=3.0 (repeatable; wins over the file and the environment)")
+    ap.add_argument("--show-settings", action="store_true", help="print the effective settings, their fingerprint and the version stamp, then exit")
     ap.add_argument("--no-later-linking", action="store_true", help="forbid linking resources to users with evidence captured after audit_at")
     ap.add_argument("--no-discovery", action="store_true", help="disable activity-timeline discovery of id-less accounts / analytics")
     ap.add_argument("--no-timing-heuristics", action="store_true",
                     help="disable the two second-of-minute heuristics (account offsets, analytics 40/41 s offset); they exploit this dataset's event timing")
     ap.add_argument("--cohort-filter", action="store_true", help="ablation only: narrow ambiguous accounts by cohort snapshot (measured harmful, off by default)")
-    ap.add_argument("--images", choices=["auto", "on", "off"], default="auto",
-                    help="read the PNG evidence with a vision model (needs ANTHROPIC_API_KEY); auto = only when a key is set")
+    ap.add_argument("--images", choices=["auto", "on", "off"], default=None,
+                    help="read the PNG evidence with a vision model (needs ANTHROPIC_API_KEY); auto = only when a key is set (default: settings llm.images)")
     ap.add_argument("--explain", metavar="CASE_ID", help="print how this one case got its answer (identity, evidence, rule, why each step exists or is omitted) and exit; "
                     "read-only: writes no output file, notes or usage log; screenshots are read only with --images on")
+    ap.add_argument("--restart", action="store_true", help="ignore a checkpoint left by an interrupted run and audit every case again")
+    ap.add_argument("--keep-checkpoint", action="store_true", help="keep <out>.partial.jsonl after a successful run (it is removed otherwise)")
     ap.add_argument("-v", "--verbose", action="store_true")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO if a.verbose else logging.WARNING, format="%(levelname)s %(message)s")
 
-    cfg = Config(allow_later_linking=not a.no_later_linking, use_discovery=not a.no_discovery, use_cohort_filter=a.cohort_filter,
-                 use_timing_heuristics=not a.no_timing_heuristics)
+    flags = [("pipeline.later_linking=false", a.no_later_linking), ("pipeline.discovery=false", a.no_discovery), ("pipeline.cohort_filter=true", a.cohort_filter),
+             ("pipeline.timing_heuristics=false", a.no_timing_heuristics), (f"llm.images={a.images}", a.images is not None)]
+    try:                                                    # precedence: defaults < settings file < environment < --set < dedicated flags
+        st = cfgmod.load(a.config, a.overrides)
+        for item, on in flags:
+            if on:
+                st = cfgmod.apply(st, *item.split("=", 1))
+    except cfgmod.SettingsError as e:
+        print(f"error: settings: {e}", file=sys.stderr)
+        return 2
+    stamp = versions.stamp(a.dataset, st.fingerprint())
+    if a.show_settings:
+        print("\n".join(f"{k} = {v}" for k, v in cfgmod.as_table(st)))
+        print("\n".join(["", *versions.stamp_lines(stamp)]))
+        return 0
+    cfg = Config.from_settings(st)
     if a.explain:
-        return _explain(a, cfg)
+        return _explain(a, cfg, st, stamp)
     usage_path = Path(os.environ.get("AUDITOR_USAGE_LOG") or a.out.with_suffix(".usage.jsonl"))
     usage_path.parent.mkdir(parents=True, exist_ok=True)
     usage_path.write_text("", encoding="utf-8")                # one log per run: evaluation/usage_report.py summarises exactly this run
     key_present = bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))      # presence only, never the value
-    images_on = a.images == "on" or (a.images == "auto" and key_present)
+    images_on = st.images == "on" or (st.images == "auto" and key_present)
     if images_on:
-        from auditor.llm import LLM
-        llm = LLM(usage_path=usage_path)
+        llm = _make_llm(st, stamp, usage_path)
         cfg.image_extractor = lambda path, system, instruction, schema, version: llm.read_image_json("image", path, system, instruction, schema, version)
     auditor = Auditor(a.dataset, cfg)
     ds = load_dataset(a.dataset, a.requests)
-    results = [auditor.audit(cid) for cid in ds.case_order]
+    # Finished cases are appended to <out>.partial.jsonl as they complete. If this run is killed, the next run with the same inputs, versions and settings
+    # (the run key, see auditor/checkpoint.py) reads the file and audits only the cases that are missing; any other run discards it.
+    key = run_key(a.dataset, a.requests, stamp, images_on, image_observation_digest(auditor))
+    ckpt = Checkpoint(a.out.with_suffix(".partial.jsonl"), key, restart=a.restart)
+    results, reused = audit_all(auditor, ds.case_order, ckpt)
+    print(f"checkpoint {ckpt.path.name}: {ckpt.how}; {reused} of {len(results)} cases reused, {len(results) - reused} audited", file=sys.stderr)
     write_output(a.out, [(x.case_id, x.status, x.steps) for x in results])
     issues = validate_output_file(a.out, ds)
     errors = [i for i in issues if i.severity == "error"]
@@ -93,8 +125,11 @@ def _run(argv: list[str] | None = None) -> int:
     from auditor.llm import UsageLog
     UsageLog(usage_path).add({"kind": "run_info", "images_read_by_model": images_on, "api_key_present": key_present, "requests": len(results), "output_file": a.out.name,
                               "output_sha256": hashlib.sha256(a.out.read_bytes()).hexdigest(), "status_counts": dict(Counter(x.status for x in results)),
-                              "provisional_rows": [x.case_id for x in results if x.provisional]})
-    notes = [f"# Run notes for {a.out.name}", "", f"cases: {len(results)}, status counts: {dict(Counter(x.status for x in results))}",
+                              "provisional_rows": [x.case_id for x in results if x.provisional], "stamp": stamp,
+                              "checkpoint": ckpt.how, "cases_reused_from_checkpoint": reused})
+    notes = [f"# Run notes for {a.out.name}", "", "## Version stamp (what produced this file)", "", *versions.stamp_lines(stamp), "",
+             "Effective settings: " + ", ".join(f"`{k}={v}`" for k, v in cfgmod.as_table(st)), "",
+             f"cases: {len(results)}, status counts: {dict(Counter(x.status for x in results))}",
              f"evidence warnings: {len(auditor.base.warnings)}", ""]
     notes += [f"* {w}" for w in auditor.base.warnings[:50]]
     notes += [f"* {w}" for w in auditor.res.warnings[:20]]
@@ -113,6 +148,7 @@ def _run(argv: list[str] | None = None) -> int:
           f"fallbacks {fallbacks}; provisional {len(provisional)} {[x.case_id for x in provisional]}; validator errors {len(errors)}", file=sys.stderr)
     for i in errors[:10]:
         print(i, file=sys.stderr)
+    ckpt.close(remove=not errors and not a.keep_checkpoint)          # on validator errors the file is kept for inspection
     return 1 if errors else 0
 
 

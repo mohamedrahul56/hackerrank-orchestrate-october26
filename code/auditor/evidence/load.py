@@ -19,12 +19,16 @@ def manifest_rows(root: Path) -> list[dict]:
     return [{**r, "t": t} for r in rows if (t := try_ts(r["captured_at"])) is not None and r["file_id"].strip()]
 
 
-def load_evidence(root: Path, include_images: bool = True, image_extractor=None) -> EvidenceBase:
+def load_evidence(root: Path, include_images: bool = True, image_extractor=None, image_workers: int = 1) -> EvidenceBase:
     """Never raises: an unreadable file becomes a warning and the rest of the evidence is still used."""
     base = EvidenceBase()
     manifest = manifest_rows(root)
     if not manifest:
         base.warnings.append("evidence manifest missing, empty or unreadable: no evidence files were used")
+    if include_images and image_extractor is not None and image_workers > 1:
+        from . import imagejobs, imageobs
+        pngs = [root / r["file_path"] for r in manifest if (root / r["file_path"]).suffix.lower() == ".png"]
+        image_extractor = imagejobs.prefetch(image_extractor, pngs, imageobs.SYSTEM, imageobs.INSTRUCTION, imageobs.SCHEMA, imageobs.PROMPT_VERSION, image_workers)
     for r in manifest:
         path, fid, t = root / r["file_path"], r["file_id"], r["t"]
         try:

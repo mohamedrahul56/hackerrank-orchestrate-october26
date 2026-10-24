@@ -21,7 +21,7 @@ def tree(root: Path, files: dict[str, str | bytes]) -> None:
         p.write_bytes(content if isinstance(content, bytes) else content.encode())
 
 
-BASE = {"README.md": "# run it", "code/main.py": "print(1)", "code/requirements.txt": "x==1", "code/NOTES.md": "notes",
+BASE = {"README.md": "# run it", "ARCHITECTURE.md": "# design", "Makefile": "test:\n\ttrue\n", "code/main.py": "print(1)", "code/requirements.txt": "x==1", "code/NOTES.md": "notes",
         "code/evaluation/extra_cases.md": "cases", "code/config/prices.example.json": "{}"}
 
 
@@ -81,7 +81,7 @@ class PackagingRules(unittest.TestCase):
         tree(self.root, BASE)
         self.assertEqual(pkg.check(pkg.collect(self.root), self.root)[0], [])
         bad, _ = pkg.check(pkg.collect(self.root), self.root, require_final=True)
-        self.assertEqual(len(bad), 2)
+        self.assertEqual(len(bad), len(pkg.FINAL_REQUIRED))      # evaluation, usage and performance reports
 
     def test_two_builds_are_byte_identical_and_hold_exactly_the_collected_files(self):
         tree(self.root, BASE)
