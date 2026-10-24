@@ -1,0 +1,5 @@
+{
+  "_comment": "Copy to prices.json (or point AUDITOR_PRICES_FILE at your file) and fill in the numbers from the provider's pricing page. Entries with null numbers, or without source_url and date, are ignored and the reports say 'cost not computed - prices not supplied'.",
+  "claude-haiku-5-5": {"input_per_mtok": null, "output_per_mtok": null, "cache_read_per_mtok": null, "source_url": "", "date": ""},
+  "claude-sonnet-5-5": {"input_per_mtok": null, "output_per_mtok": null, "cache_read_per_mtok": null, "source_url": "", "date": ""}
+}

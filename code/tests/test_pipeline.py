@@ -110,6 +110,78 @@ class DiscoveryTests(unittest.TestCase):
         out = dsc.assign_accounts([self.case("c1")], events, {}, {}, cohort={"c1": {"account_B"}})
         self.assertEqual(out["c1"].resource, "account_B")
 
+    def test_late_linked_own_account_is_known_and_not_offered_to_a_neighbour(self):
+        """Regression: c1's own account is linked only by a later snapshot (no observation in its window). It must still count as
+        c1's, otherwise elimination hands the only other candidate (c2's real account) to c1."""
+        events = [self.ev(1, "account_A", -60, result="FAILED"), self.ev(2, "account_B", -50)]
+        c1 = self.case("c1", "NOT_STARTED")
+        known = dsc.known_accounts({"account_A"}, set(), {"account_A": [events[0]], "account_B": [events[1]]}, c1.reported_at)
+        self.assertEqual(known, {"account_A"})
+        out = dsc.assign_accounts([c1, self.case("c2")], events, {"c1": known}, {"account_A": {"u_c1"}})
+        self.assertEqual((out["c1"].resource, out["c2"].resource), ("account_A", "account_B"))
+
+    def test_linked_account_without_a_delete_event_in_the_window_is_not_known(self):
+        ev = self.ev(1, "account_A", -300)                                # outside the 90 minute window
+        self.assertEqual(dsc.known_accounts({"account_A"}, set(), {"account_A": [ev]}, self.R), set())
+        self.assertEqual(dsc.known_accounts({"account_A"}, {"account_A"}, {}, self.R), {"account_A"})   # observed in window
+
+    def test_phase_model_prefers_the_candidate_whose_seconds_phase_fits(self):
+        """Learned from explicit pairs: a support redaction lands 10 s (+-1) after the account delete, whatever the minute."""
+        m = dsc.PhaseModel()
+        for i in range(12):
+            d = self.R + timedelta(minutes=-50, seconds=(i * 7) % 60)
+            m.learn(d, [dsc.Event(f"s{i}", d + timedelta(minutes=100 + i, seconds=10), "REDACT_RECORD", "deletion_worker", "support_platform", "support_1", "SUCCESS")])
+        own = [dsc.Event("x", self.R + timedelta(minutes=45, seconds=5), "REDACT_RECORD", "deletion_worker", "support_platform", "support_9", "SUCCESS")]
+        fits = m.score(own, self.R + timedelta(minutes=-50, seconds=55))[0]       # 5 - 55 = 10 mod 60
+        off = m.score(own, self.R + timedelta(minutes=-50, seconds=20))[0]
+        self.assertGreater(fits, 1.5)
+        self.assertLess(off, 0.0)
+
+    def test_phase_stage_breaks_a_tie_that_elimination_cannot(self):
+        events = [self.ev(1, "account_A", -60), self.ev(2, "account_B", -50)]
+        events = [dsc.Event(e.activity_id, e.t.replace(second=s), e.event_type, e.source, e.target, e.resource, e.result) for e, s in zip(events, (10, 40))]
+        known = [self.case(f"k{i}") for i in range(10)]
+        train_events, explicit, own = [], {}, {}
+        for i, k in enumerate(known):                     # ten solved cases: support redaction always 20 s after the account delete
+            d = dsc.Event(f"d{i}", k.reported_at + timedelta(minutes=-55, seconds=i), "DELETE_RECORD", "deletion_worker", "account_service", f"account_k{i}", "SUCCESS")
+            train_events.append(d)
+            explicit[k.case_id] = {f"account_k{i}"}
+            own[k.case_id] = [dsc.Event(f"r{i}", d.t + timedelta(minutes=90, seconds=20), "REDACT_RECORD", "deletion_worker", "support_platform", f"support_k{i}", "SUCCESS")]
+        c1, c2 = self.case("c1"), self.case("c2")
+        own["c1"] = [dsc.Event("rc1", events[0].t + timedelta(minutes=95, seconds=20), "REDACT_RECORD", "deletion_worker", "support_platform", "support_c1", "SUCCESS")]
+        own["c2"] = [dsc.Event("rc2", events[1].t + timedelta(minutes=95, seconds=20), "REDACT_RECORD", "deletion_worker", "support_platform", "support_c2", "SUCCESS")]
+        out = dsc.assign_accounts(known + [c1, c2], events + train_events, explicit, {}, None, own)
+        self.assertEqual((out["c1"].resource, out["c1"].how), ("account_A", "phase"))
+        self.assertEqual(out["c2"].resource, "account_B")
+        out = dsc.assign_accounts(known + [c1, c2], events + train_events, explicit, {}, None, {**own, "c1": [], "c2": []})
+        self.assertEqual([out[c].resource for c in ("c1", "c2")], [None, None])        # no events -> still ambiguous, never a coin flip
+
+    def test_narrowing_to_a_neighbours_account_falls_back_to_the_full_candidate_set(self):
+        """Regression: the cohort snapshot lists the neighbour's account; once the neighbour takes it, c2 must get its own, not nothing."""
+        events = [self.ev(1, "account_A", -60), self.ev(2, "account_B", -50)]
+        out = dsc.assign_accounts([self.case("c1"), self.case("c2")], events, {}, {}, cohort={"c1": {"account_A"}, "c2": {"account_A"}})
+        self.assertIsNotNone(out["c2"].resource)                                               # not left empty-handed
+        self.assertNotEqual(out["c1"].resource, out["c2"].resource)                            # and never two cases on one account
+
+    def test_analytics_phase_picks_the_claimant_whose_offset_fits(self):
+        """Chain-resolved pairs teach the offset (anonymization 41 s after the account delete); an ambiguous candidate then goes to
+        the claimant that fits, provided no other scored claimant fits too."""
+        cases, events, chain, atime = [], [], {}, {}
+        for i in range(20):
+            c = self.case(f"k{i}")
+            cases.append(c)
+            d = c.reported_at + timedelta(minutes=-55, seconds=i * 7)         # 7 s apart: no two chains alias
+            atime[c.case_id] = d
+            a = dsc.Event(f"an{i}", d + timedelta(minutes=26, seconds=41 - 60 * 0), "ANONYMIZE_RECORD", "deletion_worker", "analytics_platform", f"analytics_k{i}", "SUCCESS")
+            events.append(a)
+            chain[c.case_id] = [(a.t + timedelta(seconds=449), 1)]
+        c1, c2 = self.case("c1"), self.case("c2")
+        atime["c1"], atime["c2"] = self.R + timedelta(minutes=-55, seconds=3), self.R + timedelta(minutes=-52, seconds=33)
+        shared = dsc.Event("sh", atime["c1"] + timedelta(minutes=25, seconds=41), "ANONYMIZE_RECORD", "deletion_worker", "analytics_platform", "analytics_S", "SUCCESS")
+        out = dsc.assign_anonymized_analytics(cases + [c1, c2], events + [shared], {"analytics_S"} | {f"analytics_k{i}" for i in range(20)}, chain, None, atime)
+        self.assertEqual((out["c1"].resource, out["c1"].how), ("analytics_S", "phase"))
+        self.assertIsNone(out["c2"].resource)
+
     def test_account_linked_to_someone_else_is_never_guessed(self):
         events = [self.ev(1, "account_A", -60)]
         out = dsc.assign_accounts([self.case("c1")], events, {}, {"account_A": {"someone_else"}})
@@ -225,8 +297,50 @@ class SampleRegressionGuard(unittest.TestCase):
         m = score(gold, pred, sorted(gold))
         self.assertEqual(m.status_correct, 32)
         self.assertEqual(m.step_strict[0], 1.0)             # precision: never a wrong step on the labeled samples
-        self.assertGreaterEqual(m.step_strict[1], 0.95)     # recall
+        self.assertGreaterEqual(m.step_strict[1], 0.975)    # recall (measured 0.984 after the Phase 3 discovery fixes)
         self.assertEqual([c.case_id for c in m.cases if c.order_only], [])
+
+
+@needs_dataset
+class LaterEvidenceInvariant(unittest.TestCase):
+    """Decision D3: evidence captured after audit_at may only tie a resource to a user. It must never create or change a status,
+    a finding or a remediation - only end-state verification steps."""
+
+    def test_later_linking_only_adds_verification_steps(self):
+        from auditor.audit import Auditor, Config
+        from auditor.dataset import load_requests
+        ids = [r.case_id for r in load_requests(DATASET / "deletion_requests.csv")] + [r.case_id for r in load_requests(DATASET / "sample_deletion_requests.csv")]
+        with_, without = Auditor(DATASET, Config()), Auditor(DATASET, Config(allow_later_linking=False))
+        for cid in ids:
+            a, b = with_.audit(cid), without.audit(cid)
+            self.assertEqual(a.status, b.status, cid)
+            keep = lambda r: [(s["phase"], s["operation"], s["system_id"], s["resource_id"]) for s in r.steps if s["phase"] != "VERIFICATION"]  # noqa: E731
+            self.assertEqual(keep(a), keep(b), cid)
+
+
+@needs_dataset
+class CliMatchesLibrary(unittest.TestCase):
+    """Regression: main.py once enabled the cohort filter by default while Config() did not, so the file we would have submitted differed
+    from the numbers we reported. The CLI with no flags must give exactly what Auditor(Config()) gives."""
+
+    def test_default_cli_equals_default_library(self):
+        import importlib.util
+        from auditor.audit import Auditor
+        from auditor.dataset import load_requests
+        spec = importlib.util.spec_from_file_location("auditor_cli", ROOT / "code" / "main.py")
+        cli = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cli)
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "pred.csv"
+            self.assertEqual(cli.main(["--requests", "deletion_requests.csv", "--out", str(out), "--images", "off"]), 0)
+            with out.open(newline="", encoding="utf-8") as fh:
+                got = {r["case_id"]: (r["deletion_status"], r["steps_json"]) for r in csv.DictReader(fh)}
+        a = Auditor(DATASET)
+        import json
+        for r in load_requests(DATASET / "deletion_requests.csv"):          # the main set: that is where the cohort filter changed 18 rows
+            res = a.audit(r.case_id)
+            self.assertEqual(got[r.case_id][0], res.status, r.case_id)
+            self.assertEqual(json.loads(got[r.case_id][1]), res.steps, r.case_id)
 
 
 if __name__ == "__main__":

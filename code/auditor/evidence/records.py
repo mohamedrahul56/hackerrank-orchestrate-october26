@@ -11,7 +11,11 @@ State vocabulary (the `state` field), by data category:
   ANALYTICS_PROFILE                                                : EXPOSED | ANONYMIZED
   DATA_FLOW                                                        : ACTIVE | DISABLED
   BACKUP_ARCHIVE                                                   : RESTORABLE | BLOCKED
-  SECURITY_AUDIT_LOG, LEGAL_HOLD_RECORD                            : PRESENT
+  SECURITY_AUDIT_LOG                                               : PRESENT
+  LEGAL_HOLD_RECORD                                                : PRESENT | EXPOSED (carries a direct identifier)
+  CACHE_ENTRY, MARKETING_PROFILE                                   : PRESENT | ABSENT      (DELETE)
+  EMAIL_DELIVERY_LOG                                               : EXPOSED | REDACTED    (REDACT)
+  PRODUCT_TELEMETRY                                                : EXPOSED | ANONYMIZED  (ANONYMIZE)
 """
 from __future__ import annotations
 
@@ -91,6 +95,7 @@ class Obs:
     idents: frozenset[str] = frozenset()
     source: str = ""             # e.g. "sql:customer_data_read_replica", "log:profile_lookup_completed"
     detail: str = ""             # short human-readable reason for the state (used in notes/debugging)
+    until: datetime | None = None   # retention / hold end carried by the record itself (retained_until); None = not stated
 
 
 @dataclass(frozen=True)
@@ -139,6 +144,22 @@ def support_message_state(rec: dict) -> str:
     return "REDACTED"
 
 
+DIRECT_IDENTIFIER_KEYS = ("name", "full_name", "email", "phone", "email_hash", "customer_email", "owner_email", "requester_email")
+
+
+def retained_state(rec: dict) -> str:
+    """A record kept on legal hold may carry the stable reference (subject_reference / user_id) and order facts, nothing that identifies
+    the person directly (rule_15 states the principle: only the stable internal user_id is needed to keep references to retained records)."""
+    if any(_s(rec.get(k)) for k in DIRECT_IDENTIFIER_KEYS) or EMAIL_RE.search(_s(rec.get("subject_reference"))):
+        return "EXPOSED"
+    return "PRESENT"
+
+
+def email_log_state(rec: dict) -> str:
+    """rule_11: a delivery log that contains an e-mail address must be redacted."""
+    return "EXPOSED" if any(EMAIL_RE.search(_s(v)) for _, v in flatten(rec)) else "REDACTED"
+
+
 def export_state(rec: dict) -> str:
     avail = rec.get("download_available", rec.get("available", True))
     return "PRESENT" if str(avail).lower() not in ("false", "0", "no") else "ABSENT"
@@ -173,7 +194,14 @@ COLLECTION_RULES: dict[str, tuple[str, Any]] = {
     "security_audit_events": ("SECURITY_AUDIT_LOG", profile_state),
     "security_audit_records": ("SECURITY_AUDIT_LOG", profile_state),
     "deleted_customer_references": ("ACCOUNT_TOMBSTONE", tombstone_state),
-    "retained_order_records": ("LEGAL_HOLD_RECORD", profile_state),
+    "retained_order_records": ("LEGAL_HOLD_RECORD", retained_state),
+    # categories that no labeled sample exercises; layouts follow the neighbouring collections (verified only by evaluation/extra_cases.md)
+    "marketing_profiles": ("MARKETING_PROFILE", profile_state),
+    "cache_entries": ("CACHE_ENTRY", profile_state),
+    "email_delivery_logs": ("EMAIL_DELIVERY_LOG", email_log_state),
+    "product_telemetry_events": ("PRODUCT_TELEMETRY", analytics_state),
+    "secondary_identifiers": ("SECONDARY_IDENTIFIER", profile_state),
+    "object_attachments": ("SUPPORT_ATTACHMENT", profile_state),
 }
 
 # "record lookup" vocabulary shared by handover text, security ledger, operational_record_history and record_lookup logs
@@ -188,6 +216,10 @@ LOOKUP_RULES: dict[tuple[str, str], str] = {
     ("DATA_FLOW", "ACTIVE"): "ACTIVE", ("DATA_FLOW", "DISABLED"): "DISABLED",
     ("BACKUP_ARCHIVE", "ACTIVE"): "RESTORABLE", ("BACKUP_ARCHIVE", "BLOCKED"): "BLOCKED",
     ("ACCOUNT_TOMBSTONE", "IDENTIFIABLE"): "EXPOSED", ("ACCOUNT_TOMBSTONE", "REDACTED"): "REDACTED",
-    ("LEGAL_HOLD_RECORD", "FOUND"): "PRESENT",
+    ("LEGAL_HOLD_RECORD", "FOUND"): "PRESENT", ("LEGAL_HOLD_RECORD", "IDENTIFIABLE"): "EXPOSED",
     ("MARKETING_PROFILE", "FOUND"): "PRESENT", ("MARKETING_PROFILE", "NOT_FOUND"): "ABSENT",
+    ("CACHE_ENTRY", "FOUND"): "PRESENT", ("CACHE_ENTRY", "NOT_FOUND"): "ABSENT",
+    ("EMAIL_DELIVERY_LOG", "IDENTIFIABLE"): "EXPOSED", ("EMAIL_DELIVERY_LOG", "REDACTED"): "REDACTED",
+    ("PRODUCT_TELEMETRY", "IDENTIFIABLE"): "EXPOSED", ("PRODUCT_TELEMETRY", "ANONYMIZED"): "ANONYMIZED",
+    ("SECONDARY_IDENTIFIER", "FOUND"): "PRESENT", ("SECONDARY_IDENTIFIER", "NOT_FOUND"): "ABSENT",
 }

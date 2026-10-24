@@ -51,8 +51,9 @@ def _record_obs(base: EvidenceBase, file_id: str, file_t: datetime, t: datetime,
     if rule is None or not rid:
         return
     category, state_fn = rule
+    until = parse_ts(rec["retained_until"]) if rec.get("retained_until") else None
     base.obs.append(Obs(file_id, file_t, t, system or system_for(rid), rid, category, state_fn(rec),
-                        idents_from(flatten(rec)), source))
+                        idents_from(flatten(rec)), source, until=until))
 
 
 def load_sql(base: EvidenceBase, file_id: str, path: Path, file_t: datetime) -> None:

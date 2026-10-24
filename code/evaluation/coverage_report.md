@@ -4,13 +4,13 @@ Categories are the pipeline's reading of the evidence (record collection / event
 
 | category | rule action | resources in evidence | only in system_activity | main-set cases with a step | labeled samples with a step | status |
 |---|---|---|---|---|---|---|
-| USER_PROFILE | DELETE | 597 | 0 | 370 | 32 | covered |
+| USER_PROFILE | DELETE | 597 | 0 | 472 | 32 | covered |
 | SECONDARY_IDENTIFIER | DELETE | 4 | 0 | 0 | 2 | thin |
 | SEARCH_INDEX_ENTRY | DELETE | 314 | 0 | 269 | 12 | covered |
 | CACHE_ENTRY | DELETE | 0 | 284 | 0 | 0 | **no labeled sample** -> synthetic cases |
 | SUPPORT_MESSAGE | REDACT | 170 | 0 | 160 | 8 | covered |
 | SUPPORT_ATTACHMENT | DELETE | 23 | 0 | 19 | 2 | thin |
-| ANALYTICS_PROFILE | ANONYMIZE | 205 | 0 | 122 | 12 | covered |
+| ANALYTICS_PROFILE | ANONYMIZE | 205 | 0 | 173 | 12 | covered |
 | PRODUCT_TELEMETRY | ANONYMIZE | 0 | 0 | 0 | 0 | **no labeled sample** -> synthetic cases |
 | USER_EXPORT | DELETE | 34 | 0 | 30 | 2 | thin |
 | MARKETING_PROFILE | DELETE | 1 | 0 | 0 | 0 | **no labeled sample** -> synthetic cases |

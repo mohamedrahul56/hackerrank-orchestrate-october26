@@ -108,7 +108,7 @@ class WrapperTests(unittest.TestCase):
 
     def test_prices_come_only_from_a_user_supplied_file(self):
         pf = self.dir / "prices.json"
-        pf.write_text(json.dumps({"claude-haiku-5-5": {"input_per_mtok": 1.0, "output_per_mtok": 2.0, "source": "user pasted", "date": "2026-10-25"}}))
+        pf.write_text(json.dumps({"claude-haiku-5-5": {"input_per_mtok": 1.0, "output_per_mtok": 2.0, "source_url": "https://example.test/pricing", "date": "2026-10-25"}}))
         os.environ["AUDITOR_PRICES_FILE"] = str(pf)
         try:
             llm = self.llm([reply(GOOD, 1_000_000, 500_000)])
@@ -117,7 +117,25 @@ class WrapperTests(unittest.TestCase):
             del os.environ["AUDITOR_PRICES_FILE"]
         row = json.loads((self.dir / "usage.jsonl").read_text().splitlines()[0])
         self.assertAlmostEqual(row["cost_usd"], 2.0)
-        self.assertEqual(row["price_source"], "user pasted")
+        self.assertEqual((row["price_source"], row["price_date"]), ("https://example.test/pricing", "2026-10-25"))
+
+    def test_incomplete_price_entries_count_as_not_supplied(self):
+        from auditor import prices
+        ok = {"input_per_mtok": 1, "output_per_mtok": 2, "source_url": "https://example.test/p", "date": "2026-10-25"}
+        supplied, problems = prices.parse({"a": ok, "no_source": {**ok, "source_url": ""}, "no_date": {**ok, "date": ""}, "null_rate": {**ok, "input_per_mtok": None},
+                                           "negative": {**ok, "output_per_mtok": -1}, "_comment": "ignored"})
+        self.assertEqual(sorted(supplied), ["a"])
+        self.assertEqual(len(problems), 4)
+        self.assertAlmostEqual(supplied["a"].cost(1_000_000, 500_000), 2.0)
+        self.assertAlmostEqual(prices.parse({"c": {**ok, "cache_read_per_mtok": 0.5}})[0]["c"].cost(1_000_000, 0, 1_000_000), 0.5)
+        self.assertEqual(prices.load(self.dir / "missing.json")[0], {})
+        self.assertEqual(prices.NOT_SUPPLIED, "cost not computed - prices not supplied")
+
+    def test_example_price_file_supplies_nothing(self):
+        from auditor import prices
+        ex = Path(__file__).resolve().parents[1] / "config" / "prices.example.json"
+        supplied, problems = prices.load(ex)
+        self.assertEqual((supplied, len(problems) >= 2), ({}, True))
 
     def test_validate_schema_subset(self):
         validate_schema(GOOD, imageobs.SCHEMA)

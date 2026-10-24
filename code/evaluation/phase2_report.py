@@ -73,7 +73,8 @@ def main() -> int:
         "full pipeline": Config(),
         "no later-evidence linking (D3 off)": Config(allow_later_linking=False),
         "no activity-timeline discovery": Config(use_discovery=False),
-        "no cohort-snapshot filter for accounts": Config(use_cohort_filter=False),
+        "with cohort-snapshot narrowing (switched off by default in Phase 3)": Config(use_cohort_filter=True),
+        "no seconds-phase stages (Phase 3)": Config(use_phase=False),
     }
     L += ["## 1. Labeled samples (32): scores and ablations", "",
           "| variant / split | cases | status | step P | step R | step F1 | resource-discovery F1 | exact rows | mean LCS |",

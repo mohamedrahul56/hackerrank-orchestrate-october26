@@ -5,8 +5,8 @@ What it does for every call:
   * retries with exponential backoff on transport errors; ONE re-ask when the answer is not valid JSON for the schema
   * code validation of the answer against the JSON schema (jsonschema-style subset implemented here: type/required/enum/items)
   * usage log (JSONL): provider, model, input/output tokens, cache hit or live call, latency, cost if prices were supplied
-Prices are NEVER hard-coded. `AUDITOR_PRICES_FILE` may point to a JSON file {model: {"input_per_mtok":..,"output_per_mtok":..,
-"source":"..","date":".."}} that the user supplied; without it costs are reported as "unpriced".
+Prices are NEVER hard-coded: they come from the user's price file (see prices.py: per-model rates plus source_url and date); without
+a complete entry the cost is reported as "unpriced" ("cost not computed - prices not supplied").
 The model's text is data: it can only influence the run through fields that code then validates.
 """
 from __future__ import annotations
@@ -19,6 +19,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
+
+from . import prices
 
 DEFAULT_MODEL = "claude-haiku-5-5"            # cost-efficient, vision-capable
 DEFAULT_FALLBACK_MODEL = "claude-sonnet-5-5"  # used only when the first model fails schema validation twice
@@ -70,13 +72,6 @@ class UsageLog:
                 fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
 
-def load_prices() -> dict[str, dict]:
-    p = os.environ.get("AUDITOR_PRICES_FILE")
-    if not p or not Path(p).exists():
-        return {}
-    return json.loads(Path(p).read_text(encoding="utf-8"))
-
-
 class LLM:
     def __init__(self, cache_dir: Path | None = None, usage_path: Path | None = None, client: Any = None,
                  model: str | None = None, fallback_model: str | None = None, sleep: Callable[[float], None] = time.sleep):
@@ -86,7 +81,7 @@ class LLM:
         self.usage = UsageLog(usage_path or Path(os.environ.get("AUDITOR_USAGE_LOG", Path(__file__).resolve().parents[1] / "out" / "usage_log.jsonl")))
         self._client = client
         self._sleep = sleep
-        self.prices = load_prices()
+        self.prices, self.price_problems = prices.load()
 
     # ------------------------------------------------------------------ client
     def client(self) -> Any:
@@ -178,13 +173,11 @@ class LLM:
 
     def _usage_row(self, kind: str, path: Path, fhash: str, model: str, u: dict, attempt: int) -> dict:
         price = self.prices.get(model)
-        cost = None
-        if price:
-            cost = (u["input_tokens"] * price["input_per_mtok"] + u["output_tokens"] * price["output_per_mtok"]) / 1e6
+        cost = price.cost(u["input_tokens"], u["output_tokens"], u["cache_read"]) if price else None
         return {"ts": _now(), "provider": "anthropic", "model": model, "kind": kind, "file": path.name, "file_sha256": fhash,
                 "cache_hit": False, "calls": 1 + attempt, "input_tokens": u["input_tokens"], "output_tokens": u["output_tokens"],
                 "cache_read_input_tokens": u["cache_read"], "latency_s": u["latency_s"], "cost_usd": cost,
-                "price_source": (price or {}).get("source", "unpriced"), "price_date": (price or {}).get("date", "")}
+                "price_source": price.source_url if price else "unpriced", "price_date": price.date if price else ""}
 
 
 def _parse_json(raw: str) -> Any:

@@ -92,3 +92,13 @@ Modules under `code/auditor/`: `classify.py` (request meaning) - `identity.py` (
 `link.py` (exact-identifier links, link times) - `discover.py` (timeline discovery of id-less accounts / anonymized analytics) - `state.py` (window + latest-file rule) - `policy.py` (deletion_rules.csv -> verdict) -
 `audit.py` (case assembly, citation fallbacks) - `schema.py`/`validate.py`/`outio.py` (contract) - `llm.py` (only model access). Entry point: `python3 code/main.py`.
 The inferred rules of sections 4-7 are implemented as written; deviations and measurements are in NOTES.md section 10.
+
+## 11. As built (Phase 3 additions)
+
+* Discovery (`discover.py`): explicit links first (`known_accounts`: linked to the user AND observed in the window or deleted by the worker in the account window), then
+  elimination, then the result-matching preference, a fallback to the full candidate set, and finally the **seconds-phase stage** (`PhaseModel`, margin 2.0). Cohort-snapshot narrowing is
+  an ablation switch (`--cohort-filter`), off by default. Anonymized analytics: policy-action chain timing, then seconds-phase against the case's account-delete time, then elimination.
+* Policy additions (`records.py`, `policy.py`, `state.py`): a record may carry `retained_until`; a hold/retention that ended before `audit_at` produces no step; a RETAIN record that exposes a direct
+  identifier is treated like a REDACT violation. Collections/lookups exist for CACHE_ENTRY, EMAIL_DELIVERY_LOG, PRODUCT_TELEMETRY, MARKETING_PROFILE, SECONDARY_IDENTIFIER and object-storage attachments.
+* Tooling: `evaluation/holdout.py` (hold-out measurement incl. `stolen`), `phase3_report.py`, `extra_cases.py` (+ `extra_cases.md`), `usage_report.py`, `show_image_readings.py`; `auditor/prices.py`.
+

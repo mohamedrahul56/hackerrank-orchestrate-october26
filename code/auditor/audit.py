@@ -52,7 +52,8 @@ class CaseResult:
 class Config:
     allow_later_linking: bool = True      # D3: later evidence may link a resource to a user (never state, never cited)
     use_discovery: bool = True            # activity-timeline discovery of id-less accounts / anonymized analytics
-    use_cohort_filter: bool = True
+    use_cohort_filter: bool = False       # measured harmful by hold-out (precision 86% vs 100%): kept only as an ablation switch
+    use_phase: bool = True                # seconds-phase stage of the account discovery (PhaseModel)
     classifier_llm: object | None = None
     image_extractor: object | None = None
 
@@ -77,6 +78,7 @@ class Auditor:
         self.classification = {cid: classify_request(r.request_text, self.cfg.classifier_llm) for cid, r in self.requests.items()}
         self.users: dict[str, set[str]] = {cid: {p.user_id for p in self.res.resolve(r.email, r.requested_at)} for cid, r in self.requests.items()}
         self.account_asg: dict[str, dsc.Assignment] = {}
+        self.known_accounts: dict[str, set[str]] = {}
         self.analytics_asg: dict[str, dsc.Assignment] = {}
         if self.cfg.use_discovery:
             self._discover()
@@ -98,8 +100,12 @@ class Auditor:
                 continue
             cases.append(dsc.CaseKey(cid, frozenset(self.users[cid]), r.reported_at, r.requested_at, r.audit_at, r.reported_status))
             linked = self.link.resources_of(self.users[cid])
-            explicit[cid] = {x for x in linked if x.startswith("account_")
-                             and any(usable(o, r.requested_at, r.audit_at) for o in self.link.by_resource.get(x, []))}
+            if not self.cfg.allow_later_linking:                 # D3 off: a link made only by evidence captured after audit_at does not exist
+                linked = {x for x in linked if self.link.link_ids_before(x, self.users[cid], r.audit_at)}
+            observed = {x for x in linked if x.startswith("account_")
+                        and any(usable(o, r.requested_at, r.audit_at) for o in self.link.by_resource.get(x, []))}
+            explicit[cid] = dsc.known_accounts(linked, observed, self.events_by_resource, r.reported_at)
+            self.known_accounts[cid] = explicit[cid]
             files = self._case_files(cid)
             cohort[cid] = {o.resource for o in self.base.obs if o.category == "USER_PROFILE" and o.file_id in files}
             ch = []
@@ -113,7 +119,9 @@ class Auditor:
         for (rid, uid) in self.link.links:
             if rid.startswith("account_"):
                 owners.setdefault(rid, set()).add(uid)
-        self.account_asg = dsc.assign_accounts(cases, self.events, explicit, owners, cohort if self.cfg.use_cohort_filter else None)
+        own = {c.case_id: self._own_events(c) for c in cases} if self.cfg.use_phase else None
+        self.disc_inputs = (cases, explicit, owners, cohort, own)         # kept for the hold-out measurement (evaluation/holdout.py)
+        self.account_asg = dsc.assign_accounts(cases, self.events, explicit, owners, cohort if self.cfg.use_cohort_filter else None, own)
         anonymized = {o.resource for o in self.base.obs if o.category == "ANALYTICS_PROFILE" and o.state == "ANONYMIZED" and not o.idents}
         self.chain_events = []                                   # every completed policy action that belongs to some known user
         for rid, evs in self.events_by_resource.items():
@@ -122,7 +130,18 @@ class Auditor:
                 if e.source == "deletion_worker" and e.result == "SUCCESS" and e.event_type in CHAIN_POSITION and owners:
                     self.chain_events.append((e.t, CHAIN_POSITION[e.event_type], owners))
         has_own = {c.case_id for c in cases if any(x.startswith("analytics_") for x in self.link.resources_of(set(c.users)))}
-        self.analytics_asg = dsc.assign_anonymized_analytics([c for c in cases if c.case_id not in has_own], self.events, anonymized, chain, self._foreign_chain)
+        account_time = {cid: a.event.t for cid, a in self.account_asg.items() if a.resource and a.event is not None} if self.cfg.use_phase else None
+        self.analytics_inputs = ([c for c in cases if c.case_id not in has_own], self.events, anonymized, chain, self._foreign_chain, account_time)
+        self.analytics_asg = dsc.assign_anonymized_analytics(*self.analytics_inputs)
+
+    def _own_events(self, c: "dsc.CaseKey") -> list["dsc.Event"]:
+        """Activity events on the case's linked resources around its reported_at (timing only, never state)."""
+        seen: dict[str, dsc.Event] = {}
+        for rid in self.link.resources_of(set(c.users)):
+            for e in self.events_by_resource.get(rid, []):
+                if abs((e.t - c.reported_at).total_seconds()) < 4 * 3600:
+                    seen[e.activity_id] = e
+        return [seen[k] for k in sorted(seen)]
 
     def _foreign_chain(self, case: "dsc.CaseKey", e: "dsc.Event") -> bool:
         """True when e is followed by another user's completed policy actions at chain spacing (a decoy user's deletion)."""
@@ -161,11 +180,16 @@ class Auditor:
                     continue
                 later.append((rid, first[1], first[0].strftime("%Y-%m-%dT%H:%M:%SZ")))
             resources[rid] = "explicit"
+        later_rids = {x[0] for x in later}
         acct = self.account_asg.get(case_id)
         activity_for: dict[str, dsc.Event | None] = {}
         if acct and acct.resource and acct.resource not in resources:
             resources[acct.resource] = acct.how
             activity_for[acct.resource] = acct.event
+            if acct.how == "explicit":                           # linked by a snapshot captured after audit_at: a logged later-evidence use
+                first = self.link.first_link_time(acct.resource, users)
+                if first is not None and first[0] > audit_at:
+                    later.append((acct.resource, first[1], first[0].strftime("%Y-%m-%dT%H:%M:%SZ")))
         ana = self.analytics_asg.get(case_id)
         if ana and ana.resource and ana.resource not in resources:
             resources[ana.resource] = f"analytics-{ana.how}"
@@ -182,9 +206,17 @@ class Auditor:
         violations = []
         compliant = []
         for rid, st in states.items():
+            if st.until is not None and st.until <= audit_at:
+                notes.append(f"{rid}: retention/hold ended {st.until:%Y-%m-%dT%H:%M:%SZ} (before audit_at): no retain requirement, no step")
+                continue
             v = self.policy.judge(st.category, st.state)
             if v is None:
                 notes.append(f"{rid}: state {st.state} for {st.category} says nothing about policy; ignored")
+                continue
+            if v.violation and rid in later_rids:
+                # a finding must stand on evidence available at audit_at; a record tied to the user only by a later snapshot may
+                # support an end-state check, never a finding or a remediation (decision D3). Measured: this never fires today.
+                notes.append(f"{rid}: violation not reported - the record is linked to the user only by evidence captured after audit_at")
                 continue
             (violations if v.violation else compliant).append((st, v))
         # accounts with no state evidence in the window: discovered through the activity stream, or linked explicitly by a
@@ -194,7 +226,8 @@ class Auditor:
             if rid in states or not rid.startswith("account_"):
                 continue
             first = min((o.file_t for o in self.link.by_resource.get(rid, [])), default=None)
-            if how != "explicit" or (first is not None and t0 <= first <= audit_at + timedelta(days=LATER_LINK_MAX_DAYS)):
+            deleted_in_window = rid in self.known_accounts.get(case_id, ())     # linked to the user AND deleted by the worker in the window
+            if how != "explicit" or deleted_in_window or (first is not None and t0 <= first <= audit_at + timedelta(days=LATER_LINK_MAX_DAYS)):
                 unobserved_accounts.append(rid)
         # other linked resources with no state evidence in the window that first appear at/after the request (e.g. a retained
         # audit record seen only in a later snapshot of the cohort): their END state is still a required check, with no citation

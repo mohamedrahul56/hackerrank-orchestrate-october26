@@ -249,3 +249,40 @@ repo_root=/home/user/hackerrank-orchestrate-october26
 worktree=main
 parent_agent=none
 
+
+## [2026-10-24T16:31:19Z] Phase 3: discovery signals, policy categories, tooling
+
+User Prompt (verbatim, secrets redacted):
+go for Phase 3 with these decisions:
+1. API key: I will set ANTHROPIC_API_KEY in the environment myself. Never ask me to paste it in chat or write it to any file in the repo. Prices: I'll supply them in a config file with source URL and date; until then usage_report.md must say "cost not computed - prices not supplied". The 9 PNG-only rows stay conservative placeholders until the real VLM run. Also add a small script that prints each PNG next to the model's extracted JSON so I can verify the 11 readings by eye.
+2. Two account candidates: keep omitting. Report how many main rows have exactly 2 candidates and the estimated F1 effect either way. Do not change the behavior.
+3. Legal holds: keep applying, derived from the text of the rule, only where a resource id is linked to the user AND the hold is active at audit_at; also check the retained record against the rule's permitted identifiers (exposed PII -> redact if violated). Before coding anything further, explain why the six register users in the labeled samples have no legal-hold step in gold, and tell me whether that is consistent with the rule. If it contradicts it, stop and ask me.
+
+Before iterating, report:
+a) how many of the 138 missing-account rows could have a different deletion_status if the account were found;
+b) predicted COMPLETE/INCOMPLETE/NOT_APPLICABLE counts on the main set vs the samples;
+c) confirmation that no FINDING step depends on later-evidence linking (fix if any does);
+d) leave-one-out precision of the elimination heuristic on the labeled samples, and how many main rows depend on elimination.
+
+Then iterate in this order of expected gain, using the Phase 3 loop (reproduce one failure, add a regression test, make the smallest general fix, re-run the labeled set, revert if anything regresses, log in CHANGELOG with before/after):
+1. Account ambiguity (100 ambiguous-timeline rows): look for additional GENERAL signals; accept a heuristic only if its leave-one-out precision on the samples is clearly above 50%.
+2. Anonymized analytics when cases share reported_at.
+3. Policy categories without labeled samples: write synthetic cases for each, with expected outputs derived from deletion_rules.csv, inside Markdown.
+No new heavy dependencies. Keep determinism (two runs byte-identical). Stop at the Phase 3 checkpoint with updated scores, the loop log, and the remaining failures.
+
+Agent Response Summary:
+Explained the legal-hold question first (register has no resource id, its six users have no legal_hold_* record, so gold cannot contain a step: consistent with rule_13, no stop). Measured (a)-(d) and iterated: seconds-phase signal for accounts and anonymized analytics (hold-out precision 100%), late-linked own accounts, full-set fallback, cohort narrowing switched off (hold-out precision 85%), CLI/library default mismatch fixed. Samples: status 32/32, step P 100% R 98.4% F1 99.2% (Phase 2: R 95.9%, F1 97.9%); main rows without an account step 138 -> 36. Added legal-hold expiry/identifier handling, 23 synthetic Markdown cases (all pass), strict prices loader, usage-report generator and an image-readings viewer.
+
+Actions:
+* Created/changed code/auditor/{discover,audit,policy,state,llm,prices}.py, evidence/{records,loaders}.py, main.py; code/evaluation/{holdout,phase3_report,extra_cases,usage_report,show_image_readings}.py; code/config/prices.example.json
+* Generated phase3_results.md, extra_cases.md, extra_cases_results.md, refreshed phase2_results.md / later_evidence_log.md / coverage_report.md; updated CHANGELOG (rows 14-22), NOTES (section 11), SPEC (section 11), SUBMISSION_CHECKLIST
+* Added tests (112 total, all pass): extra cases, usage report, image viewer, D3 invariant, CLI-equals-library, phase stages
+* Ran main.py twice on all 518 cases: byte-identical output; committed and pushed
+
+Context:
+tool=Claude Code
+model=claude-sonnet-5-5
+branch=claude/exciting-lamport-yrcfpx
+repo_root=/home/user/hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none

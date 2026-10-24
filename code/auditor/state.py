@@ -28,6 +28,7 @@ class ResourceState:
     file_t: datetime
     t: datetime
     source: str
+    until: datetime | None = None      # retention / hold end stated by the record (None = not stated)
 
 
 def usable(o: Obs, t0: datetime, audit_at: datetime) -> bool:
@@ -44,4 +45,4 @@ def resolve(observations: list[Obs], t0: datetime, audit_at: datetime) -> Resour
         last_t = max(o.t for o in in_file)
         in_file = [o for o in in_file if o.t == last_t]
     chosen = max(in_file, key=lambda o: SEVERITY.get(o.state, 0))  # tables of one snapshot: any copy that violates counts
-    return ResourceState(chosen.resource, chosen.system, chosen.category, chosen.state, chosen.file_id, chosen.file_t, chosen.t, chosen.source)
+    return ResourceState(chosen.resource, chosen.system, chosen.category, chosen.state, chosen.file_id, chosen.file_t, chosen.t, chosen.source, chosen.until)

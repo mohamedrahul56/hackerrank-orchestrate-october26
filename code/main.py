@@ -32,18 +32,21 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, default=ROOT / "output.csv")
     ap.add_argument("--no-later-linking", action="store_true", help="forbid linking resources to users with evidence captured after audit_at")
     ap.add_argument("--no-discovery", action="store_true", help="disable activity-timeline discovery of id-less accounts / analytics")
-    ap.add_argument("--no-cohort-filter", action="store_true")
+    ap.add_argument("--cohort-filter", action="store_true", help="ablation only: narrow ambiguous accounts by cohort snapshot (measured harmful, off by default)")
     ap.add_argument("--images", choices=["auto", "on", "off"], default="auto",
                     help="read the PNG evidence with a vision model (needs ANTHROPIC_API_KEY); auto = only when a key is set")
     ap.add_argument("-v", "--verbose", action="store_true")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO if a.verbose else logging.WARNING, format="%(levelname)s %(message)s")
 
-    cfg = Config(allow_later_linking=not a.no_later_linking, use_discovery=not a.no_discovery, use_cohort_filter=not a.no_cohort_filter)
+    cfg = Config(allow_later_linking=not a.no_later_linking, use_discovery=not a.no_discovery, use_cohort_filter=a.cohort_filter)
     llm = None
     if a.images == "on" or (a.images == "auto" and (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))):
         from auditor.llm import LLM
-        llm = LLM(usage_path=a.out.with_suffix(".usage.jsonl"))
+        usage_path = Path(os.environ.get("AUDITOR_USAGE_LOG") or ROOT / "code" / "out" / "usage_log.jsonl")
+        usage_path.parent.mkdir(parents=True, exist_ok=True)
+        usage_path.write_text("", encoding="utf-8")            # one log per run: evaluation/usage_report.py summarises exactly this run
+        llm = LLM(usage_path=usage_path)
         cfg.image_extractor = lambda path, system, instruction, schema, version: llm.read_image_json("image", path, system, instruction, schema, version)
     auditor = Auditor(a.dataset, cfg)
     ds = load_dataset(a.dataset, a.requests)

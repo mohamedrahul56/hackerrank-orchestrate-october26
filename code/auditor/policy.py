@@ -79,6 +79,9 @@ class PolicyEngine:
         """None when the state says nothing about policy (unknown state)."""
         action = self.action_for(category)
         t = TREATMENTS[action]
+        if action == "RETAIN" and state == "EXPOSED":
+            # a retained record keeps its place but may only carry the stable reference (rule_15's principle): redact the rest
+            action, t = "REDACT", TREATMENTS["REDACT"]
         if state in t.bad:
             return Verdict(category, state, action, t, True, True)
         if state in t.ok:

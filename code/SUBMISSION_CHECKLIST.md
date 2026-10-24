@@ -22,5 +22,7 @@
 7. If you used another harness (Codex, etc.) add its own subfolder.
 
 ## Final-run rules
-- [ ] `usage_report.md` comes from a cold-cache full run of all 518 cases (cache dir deleted first); prices only from what you pasted (source + date recorded) or "unpriced".
+- [ ] `usage_report.md` comes from a cold-cache full run of all 518 cases; prices only from your own file (`code/config/prices.json`, per model: rates + source URL + date) or the report says "cost not computed - prices not supplied".
+  Sequence (in your own shell; the key is never written to a file): `export ANTHROPIC_API_KEY=...` -> `python3 code/evaluation/show_image_readings.py` (look at the 11 pictures next to the readings; open `code/out/image_readings.html`)
+  -> `rm -rf code/.cache/llm code/out/usage_log.jsonl` -> `python3 code/main.py` -> `python3 code/evaluation/usage_report.py --final`.
 - [ ] Submission URL taken from your registration email (not from AGENTS.md).
