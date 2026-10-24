@@ -30,7 +30,7 @@ EXCLUDED_DIRS = {"__pycache__", ".git", ".venv", "venv", "node_modules", ".cache
 EXCLUDED_PREFIXES = ("code/out/", "code/.cache/", "dataset/", "agent-trace", "output")
 EXCLUDED_NAMES = {".env", "prices.json", "log.txt", ".DS_Store"}
 REQUIRED = ["README.md", "ARCHITECTURE.md", "Makefile", "code/main.py", "code/requirements.txt", "code/evaluation/extra_cases.md", "code/NOTES.md"]
-FINAL_REQUIRED = ["code/evaluation/evaluation_report.md", "code/evaluation/usage_report.md", "code/evaluation/performance_report.md", "code/evaluation/edge_case_sweep.md"]
+FINAL_REQUIRED = ["code/evaluation/evaluation_report.md", "code/evaluation/usage_report.md", "code/evaluation/performance_report.md", "code/evaluation/edge_case_sweep.md", "code/evaluation/agent_layer_report.md"]
 MAX_FILE_BYTES = 5_000_000
 
 SECRET_PATTERNS = {

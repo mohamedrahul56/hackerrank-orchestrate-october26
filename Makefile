@@ -5,7 +5,7 @@ PYTHON ?= python3
 CASE   ?=
 
 .DEFAULT_GOAL := help
-.PHONY: help setup test run score explain edge package check bench clean
+.PHONY: help setup test run score explain edge agent package check bench clean
 
 help:
 	@echo "make setup            install the Python dependencies (pypdf; anthropic is only used when ANTHROPIC_API_KEY is set)"
@@ -14,6 +14,7 @@ help:
 	@echo "make score            run the 32 labeled sample requests and print the score report"
 	@echo "make explain CASE=case_48   print how one case got its answer (read-only, writes nothing)"
 	@echo "make edge             run the edge-case sweep (118 scenarios) and write code/evaluation/edge_case_sweep.md"
+	@echo "make agent            run the no-change proofs and the fake-client tests of the opt-in agent layer -> code/evaluation/agent_layer_report.md"
 	@echo "make package          check every submission rule and write ./code.zip"
 	@echo "make check            build code.zip and run the final submission checklist (output.csv, log.txt, reports, zip contents)"
 	@echo "make bench            profile the run at 1x, 2x, 5x, 10x and 20x the requests (a few minutes)"
@@ -37,6 +38,9 @@ explain:
 
 edge:
 	$(PYTHON) code/evaluation/edge_sweep.py --quiet
+
+agent:
+	$(PYTHON) code/evaluation/agent_proofs.py
 
 package:
 	$(PYTHON) code/tools/package.py --require-final

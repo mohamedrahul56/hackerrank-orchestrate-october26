@@ -35,4 +35,5 @@ def prefetch(extractor: Callable, paths: list[Path], system: str, instruction: s
         if kind == "err":
             raise value
         return value
+    replay.obs_source = getattr(extractor, "obs_source", "image:vlm")          # the source tag of the observations travels with the extractor
     return replay

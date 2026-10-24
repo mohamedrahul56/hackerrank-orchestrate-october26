@@ -62,7 +62,8 @@ def summarise(rows: list[dict], n_requests: int, prices: dict, price_problems: l
     if not rows:
         L += ["**No model calls were made in this run: 0 calls, 0 input tokens, 0 output tokens.** Every decision, including every status and every step, was made by deterministic code. "
               "The vision path (`claude-haiku-5-5`, fallback `claude-sonnet-5-5`, configured but not called) was **tested only with fakes** because no API key was available; "
-              "the screenshots were not read, which is why the rows that depend only on a screenshot are provisional.", ""]
+              "the screenshots were not read, which is why the rows that depend only on a screenshot are provisional.",
+              "**Agent layer built and tested with fakes only; 0 calls, 0 tokens, no cost.** The opt-in tool-calling reader (`--images agent`, `auditor/agent`, report `agent_layer_report.md`) was never run against a real model.", ""]
     by_model = collections.defaultdict(lambda: collections.Counter())
     by_kind = collections.defaultdict(lambda: collections.Counter())
     for r in live:

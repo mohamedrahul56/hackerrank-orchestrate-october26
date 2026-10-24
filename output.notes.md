@@ -4,11 +4,12 @@
 
 * pipeline version: `2026.10.5`
 * rules file (deletion_rules.csv) sha256: `e12d47ca4cbecc4a3c924b52705d9c5b1ebcfa71d6a28f58d988571eeccb32f7`
+* prompt `agent_image_reader`: version `agent-img-v1/agent-img-v1`, text+schema sha256 `f35c7e3157931a9263420a18f70a744f4ba7d88cef0bbf52029ae868d4ca750b`
 * prompt `image_reading`: version `img-v1`, text+schema sha256 `efbeb55e3b07b96064fc758c9bbda64d44ae9a32f8930b826f178eec33511fce`
-* code sha256 (auditor/*.py): `6ddcccb7285620f08b01809909a687788cfe478fc4f5de2076428c2be25e2538`
+* code sha256 (auditor/*.py): `f763022abd1e6563013ec6638f6f6f4f8cdcf34533066548a73f2b6c0cf2fd0c`
 * settings fingerprint: `6ea863510c033d1e6b33d4a5c81465be030cb06376f8c05c239ae14f5bfcf9fe`
 
-Effective settings: `pipeline.cohort_filter=false`, `pipeline.discovery=true`, `pipeline.later_linking=true`, `pipeline.provisional_rows=true`, `pipeline.timing_heuristics=true`, `llm.cache_dir=""`, `llm.fallback_model="claude-sonnet-5-5"`, `llm.images="auto"`, `llm.max_concurrency=4`, `llm.model="claude-haiku-5-5"`, `llm.readings_file=""`, `llm.timeout_seconds=60.0`, `discovery.account_window_minutes=[-90.0, 15.0]`, `discovery.analytics_min_llr=2.0`, `discovery.analytics_window_minutes=[-45.0, -5.0]`, `discovery.chain_gaps_seconds=[390, 449]`, `discovery.chain_tolerance_seconds=2.0`, `discovery.phase_margin=2.0`, `audit.later_link_max_days=7`
+Effective settings: `pipeline.cohort_filter=false`, `pipeline.discovery=true`, `pipeline.later_linking=true`, `pipeline.provisional_rows=true`, `pipeline.timing_heuristics=true`, `llm.cache_dir=""`, `llm.fallback_model="claude-sonnet-5-5"`, `llm.images="auto"`, `llm.max_concurrency=4`, `llm.model="claude-haiku-5-5"`, `llm.readings_file=""`, `llm.timeout_seconds=60.0`, `discovery.account_window_minutes=[-90.0, 15.0]`, `discovery.analytics_min_llr=2.0`, `discovery.analytics_window_minutes=[-45.0, -5.0]`, `discovery.chain_gaps_seconds=[390, 449]`, `discovery.chain_tolerance_seconds=2.0`, `discovery.phase_margin=2.0`, `audit.later_link_max_days=7`, `agent.max_iterations=5`, `agent.max_tool_calls=6`, `agent.max_zooms=4`, `agent.wall_seconds=120.0`, `agent.zoom_max_px=1200`
 
 cases: 518, status counts: {'INCOMPLETE': 356, 'COMPLETE': 152, 'NOT_APPLICABLE': 10}
 evidence warnings: 11

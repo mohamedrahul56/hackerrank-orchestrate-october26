@@ -41,8 +41,15 @@ def rules_digest(dataset_dir: Path) -> str:
 def prompts() -> dict[str, dict[str, str]]:
     """Every prompt a model sees: label and digest of its text + schema."""
     from .evidence import imageobs
-    return {"image_reading": {"version": imageobs.PROMPT_VERSION,
-                              "digest": digest_text(imageobs.SYSTEM, imageobs.INSTRUCTION, json.dumps(imageobs.SCHEMA, sort_keys=True))}}
+    out = {"image_reading": {"version": imageobs.PROMPT_VERSION,
+                             "digest": digest_text(imageobs.SYSTEM, imageobs.INSTRUCTION, json.dumps(imageobs.SCHEMA, sort_keys=True))}}
+    try:                                                      # the agent layer's prompt files and tool definitions (code/prompts/, auditor/agent/tools.py)
+        from .agent import prompts as agent_prompts, tools as agent_tools
+        sysp, task = agent_prompts.load("image_reader.system.md"), agent_prompts.load("image_reader.task.md")
+        out["agent_image_reader"] = {"version": f"{sysp.version}/{task.version}", "digest": digest_text(sysp.text, task.text, agent_tools.tools_digest())}
+    except Exception as e:  # noqa: BLE001 - a missing prompt file must not break the run stamp of a run that does not use the agent
+        out["agent_image_reader"] = {"version": "unavailable", "digest": f"{type(e).__name__}"}
+    return out
 
 
 def code_digest() -> str:

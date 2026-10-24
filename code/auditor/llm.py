@@ -168,6 +168,20 @@ class LLM:
 
     # ------------------------------------------------------------------ internals
     def _call(self, model: str, system: str, instruction: str, data: bytes, media: str, schema: dict) -> tuple[str, dict]:
+        resp, usage = self._send(
+            model=model, max_tokens=4000, system=system,
+            output_config={"effort": "low", "format": {"type": "json_schema", "schema": schema}},
+            messages=[{"role": "user", "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": media, "data": base64.standard_b64encode(data).decode()}},
+                {"type": "text", "text": instruction}]}])
+        if getattr(resp, "stop_reason", "") == "refusal":
+            raise SchemaError("model refused")
+        text = "".join(getattr(b, "text", "") for b in resp.content if getattr(b, "type", "") == "text")
+        return text, usage
+
+    def _send(self, **create_kwargs: Any) -> tuple[Any, dict]:
+        """One Messages API request with the shared policy: the per-request timeout, back-off on transport errors / 429 / 5xx (Retry-After honoured, capped), a pause shared by
+        every worker after a 429. Returns (response, usage); raises LLMUnavailable when the call cannot be completed. Used by the single-shot reader and by the agent loop."""
         client = self.client()
         delay = 1.0
         waited_until = 0.0                                   # the pause this call already sat out itself
@@ -175,17 +189,9 @@ class LLM:
             self._wait_for_pause(waited_until)
             try:
                 t0 = time.time()
-                resp = client.messages.create(
-                    model=model, max_tokens=4000, system=system, timeout=self.timeout_s,
-                    output_config={"effort": "low", "format": {"type": "json_schema", "schema": schema}},
-                    messages=[{"role": "user", "content": [
-                        {"type": "image", "source": {"type": "base64", "media_type": media, "data": base64.standard_b64encode(data).decode()}},
-                        {"type": "text", "text": instruction}]}])
-                if getattr(resp, "stop_reason", "") == "refusal":
-                    raise SchemaError("model refused")
-                text = "".join(getattr(b, "text", "") for b in resp.content if getattr(b, "type", "") == "text")
+                resp = client.messages.create(timeout=self.timeout_s, **create_kwargs)
                 u = resp.usage
-                return text, {"input_tokens": getattr(u, "input_tokens", 0), "output_tokens": getattr(u, "output_tokens", 0),
+                return resp, {"input_tokens": getattr(u, "input_tokens", 0), "output_tokens": getattr(u, "output_tokens", 0),
                               "cache_read": getattr(u, "cache_read_input_tokens", 0) or 0, "latency_s": round(time.time() - t0, 3)}
             except (SchemaError, LLMUnavailable):
                 raise

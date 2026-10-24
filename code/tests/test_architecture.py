@@ -13,7 +13,7 @@ class ArchitectureDoc(unittest.TestCase):
     text = DOC.read_text(encoding="utf-8") if DOC.exists() else ""
 
     def test_the_document_has_every_requested_part(self):
-        for needle in ("```mermaid", "flowchart", "## 2. Modules", "## 3. Failure modes", "## 4. Measured performance", "### D1.", "### D2.", "### D3.", "### D4."):
+        for needle in ("```mermaid", "flowchart", "## 2. Modules", "## 3. Failure modes", "## 4. Measured performance", "### D1.", "### D2.", "### D3.", "### D4.", "### D5."):
             self.assertIn(needle, self.text)
 
     def test_performance_table_is_copied_verbatim_from_the_generated_report(self):
@@ -38,6 +38,9 @@ class ArchitectureDoc(unittest.TestCase):
         for p in sorted((ROOT / "code" / "auditor").glob("*.py")):
             if p.name != "__init__.py":
                 self.assertIn(p.stem, section, f"{p.name} is not mentioned in the module table")
+        for p in sorted((ROOT / "code" / "auditor" / "agent").glob("*.py")):
+            if p.name != "__init__.py":
+                self.assertIn(p.stem, section, f"agent/{p.name} is not mentioned in the module table")
         for p in sorted((ROOT / "code" / "auditor" / "evidence").glob("*.py")):
             if p.name != "__init__.py" and p.stem not in ("loaders", "logobs", "logparse", "pdfobs", "records"):      # covered by the row "auditor/evidence/*"
                 self.assertIn(p.stem, section, f"{p.name} is not mentioned in the module table")
@@ -50,7 +53,7 @@ class ArchitectureDoc(unittest.TestCase):
             self.assertTrue((ROOT / "code" / "tests" / f"{n}.py").exists(), n)
 
     def test_every_decision_record_states_its_risk_or_cost(self):
-        for d in ("D2", "D3", "D4"):
+        for d in ("D2", "D3", "D4", "D5"):
             body = self.text.split(f"### {d}.")[1].split("### D")[0]
             self.assertRegex(body, r"\*\*(Cost|Risk|Rejected)\.?\*\*", d)
 

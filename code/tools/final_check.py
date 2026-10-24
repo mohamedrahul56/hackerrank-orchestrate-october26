@@ -88,7 +88,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # ---------------------------------------------------------------- reports
     ev = ROOT / "code" / "evaluation"
-    for name in ("evaluation_report.md", "usage_report.md", "performance_report.md", "edge_case_sweep.md"):
+    for name in ("evaluation_report.md", "usage_report.md", "performance_report.md", "edge_case_sweep.md", "agent_layer_report.md"):
         p = ev / name
         add(f"`code/evaluation/{name}` exists and renders as well-formed Markdown", p.exists() and not problems(p), "; ".join(problems(p)) if p.exists() else "missing")
     usage = (ev / "usage_report.md").read_text(encoding="utf-8") if (ev / "usage_report.md").exists() else ""
@@ -118,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
         add("`code.zip` exists, is a valid archive and its names equal the checked file list", tz is None and sorted(names) == sorted(pkg.rel(p, ROOT) for p in files), f"{len(names)} files, {zpath.stat().st_size // 1024} KiB")
         add("`code.zip` has no `dataset/`, `.env`, `prices.json`, `code/out/`, nested archive; has README.md, README.md, ARCHITECTURE.md, Makefile, the three reports, INTERVIEW_PREP.md, extra_cases.md",
             not any(n.startswith("dataset/") or n.split("/")[-1].startswith(".env") or n.endswith("/prices.json") or n.startswith("code/out/") or any(n.endswith(e) for e in pkg.ARCHIVE_EXT) for n in names)
-            and all(n in names for n in ("README.md", "ARCHITECTURE.md", "Makefile", "code/evaluation/evaluation_report.md", "code/evaluation/usage_report.md", "code/evaluation/performance_report.md", "code/evaluation/edge_case_sweep.md", "code/INTERVIEW_PREP.md", "code/evaluation/extra_cases.md")))
+            and all(n in names for n in ("README.md", "ARCHITECTURE.md", "Makefile", "code/evaluation/evaluation_report.md", "code/evaluation/usage_report.md", "code/evaluation/performance_report.md", "code/evaluation/edge_case_sweep.md", "code/evaluation/agent_layer_report.md", "code/prompts/image_reader.system.md", "code/INTERVIEW_PREP.md", "code/evaluation/extra_cases.md")))
         add("the extracted `code.zip`, run on the dataset, reproduces `output.csv` byte for byte", same_zip)
     else:
         add("`code.zip` exists", False, "run with --build-zip")

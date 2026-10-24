@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "code"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import agent_proofs  # noqa: E402
 import edge_sweep as sweep  # noqa: E402
 import extra_cases as xc  # noqa: E402
 from auditor.audit import Auditor, Config  # noqa: E402
@@ -223,7 +224,13 @@ def main() -> int:
           "covered by tests with a fake client, and `evaluation/show_image_readings.py` lets a reader compare each of the 11 PNGs with the model's reading. "
           f"The only rows that can change are the {len(prov)} provisional ones (`{', '.join(prov)}`), plus any row whose evidence includes a PNG that the structured data already covers."]
     L += readings_experiment(cli, out_csv, prov, main_ids)
-    L += ["", "### 5.5 Edge-case sweep", "",
+    L += ["", "### 5.5 The opt-in agent layer (`--images agent`)", "",
+          "**Agent layer built and tested with fakes only; 0 calls, 0 tokens, no cost.** A bounded tool-calling reader (tools `zoom_region` and `submit_reading`, versioned prompts in `code/prompts/`, "
+          "a deterministic gate, caps, caching, fallback to the deterministic result) can read the screenshots with a model. It is opt-in and was never run against a real model (no key). "
+          "Live no-change proofs and the test inventory are in `code/evaluation/agent_layer_report.md`:", ""]
+    L += [f"* {a_}: expected {b_}; observed {c_} - **{d_}**" for a_, b_, c_, d_ in agent_proofs.proofs()]
+    L += ["", "The gate rule that can change a state, G10 (a model reading cannot lower the severity of a state that deterministic evidence supports), is applied only to model-sourced observations, "
+          "so the default path is byte-identical by construction.", "", "### 5.6 Edge-case sweep", "",
           "`code/evaluation/edge_sweep.py` runs the real pipeline on small synthetic datasets that each isolate one awkward input (empty or missing fields, bad timestamps, duplicate or unknown ids, "
           "e-mail spelling, old e-mails, several requests per user, events after audit_at, failed-but-claimed-success operations, resources without an identifier, shared reported_at, retained records "
           "with extra identifiers, expired legal holds, corrupt or missing evidence, corrupt PNGs, prompt injection). Every scenario states its expected behaviour in words before the run; the full table "
@@ -260,7 +267,7 @@ def main() -> int:
           "* **'No later-evidence' ablation leaked later evidence** through late-linked accounts, and those links were not in the log; fixed and logged (row 19).",
           "* **A wrong NOT_APPLICABLE placeholder** for deletion requests whose only evidence is a screenshot; replaced by provisional INCOMPLETE rows (row 23).",
           "* **An instruction-like status word extracted from an image could have flipped a state**; model-written fields are now sanitised (row 28).",
-          "* **The edge-case sweep (section 5.5) found 8 defects** on its first run: a time without a zone was read in the machine's time zone; an unreadable `retained_until` dropped a legal-hold record; "
+          "* **The edge-case sweep (section 5.6) found 8 defects** on its first run: a time without a zone was read in the machine's time zone; an unreadable `retained_until` dropped a legal-hold record; "
           "a manifest path could leave the dataset folder; a request text above 128 KiB ended the whole run; a resource id taken from evidence was copied into a step verbatim; a missing or malformed "
           "rules file was a traceback and an unknown rule action silently turned cases into NOT_APPLICABLE (row 44).", ""]
     L += table_from(OUT / "CHANGELOG.md", "| #") + [""]
@@ -311,7 +318,8 @@ def main() -> int:
 
     # ------------------------------------------------------------------ 10. unmeasured
     L += ["## 10. Not measured", "",
-          "* vision-model accuracy on the 11 screenshots, its run-to-run variance, token usage and cost (no API key was available; `usage_report.md` states 0 calls). The readings file is one pass of "
+          "* vision-model accuracy on the 11 screenshots, its run-to-run variance, token usage and cost (no API key was available; `usage_report.md` states 0 calls); the same holds for the agent layer "
+          "(agent layer built and tested with fakes only; 0 calls, 0 tokens, no cost). The readings file is one pass of "
           "the coding agent's own vision, checked by nobody else yet, and is not a measurement of a vision model;",
           f"* the true answers of the {len(prov)} provisional rows;",
           "* the exposed-identifier shape of a legal-hold record, and all policy categories without a labeled sample, beyond the synthetic cases;",

@@ -17,6 +17,7 @@ make test                       # the whole test suite; needs no key and no netw
 make run                        # all 518 requests -> ./output.csv  (+ output.notes.md, output.usage.jsonl)
 make score                      # the 32 labeled sample requests and the score report
 make explain CASE=case_48       # how one case got its answer; read-only, writes nothing
+make agent                      # no-change proofs and fake-client tests of the opt-in agent layer -> code/evaluation/agent_layer_report.md
 make edge                       # the 118-scenario edge-case sweep (empty fields, bad times, corrupt files, injection ...) -> code/evaluation/edge_case_sweep.md
 make package                    # check every submission rule and write ./code.zip
 make check                      # build code.zip and run the final submission checklist
@@ -38,7 +39,7 @@ Tested on Python 3.13. Reading is limited to `dataset/`; nothing else is read. T
 | option | effect |
 |---|---|
 | `--requests sample_deletion_requests.csv --out code/out/pred_samples.csv` | run the 32 labeled samples |
-| `--images auto` (default) / `on` / `off` / `file` | read the PNG evidence with a vision model; `auto` = only when `ANTHROPIC_API_KEY` is set; `file` = take each screenshot's reading from a readings file (below), no model |
+| `--images auto` (default) / `on` / `off` / `file` / `agent` | read the PNG evidence with a vision model; `auto` = only when `ANTHROPIC_API_KEY` is set; `file` = take each screenshot's reading from a readings file (below), no model; `agent` = the opt-in bounded tool-calling reader (below) |
 | `--explain CASE_ID` | print how that one case got its answer (identity, evidence per resource with the one used, the rule, why each step exists or is left out) and exit; read-only: writes no `output.csv`, notes or usage log; screenshots are read only with `--images on` |
 | `--config FILE`, `--set section.key=value` | settings file (default `code/config/settings.toml`, every setting documented there) and one-value overrides; precedence: defaults, file, environment, `--set`, the dedicated flags below; `--show-settings` prints the effective values and the version stamp |
 | `--restart`, `--keep-checkpoint` | finished cases are appended to `output.partial.jsonl` while the run goes; after a kill the next run with the same inputs, versions and settings audits only the missing cases and writes the same bytes; `--restart` ignores the file, `--keep-checkpoint` keeps it after success |
@@ -61,6 +62,17 @@ fallback `claude-sonnet-5-5` (`AUDITOR_VLM_MODEL`, `AUDITOR_VLM_FALLBACK_MODEL`)
 model's JSON and the observations the code derives from it. Readings are cached on disk (`AUDITOR_CACHE_DIR`, default `code/.cache/llm`). For cost reporting put per-model rates plus a source URL and a date
 in `code/config/prices.json` (template: `code/config/prices.example.json`); without them the usage report says `cost not computed - prices not supplied`.
 `python3 code/evaluation/usage_report.py --final` summarises the log written by the last `main.py` run.
+
+**The agent layer (opt-in: `--images agent`).** Agent layer built and tested with fakes only; 0 calls, 0 tokens, no cost. A small, bounded tool-calling loop (`auditor/agent/`) reads one screenshot at a time: the model may call `zoom_region`
+(an enlarged crop of the same screenshot; needs Pillow, `pillow==12.3.0` in `requirements.txt`; if it is not installed the tool is not offered and a warning is logged) and ends with exactly one `submit_reading`.
+Code runs the loop and enforces 5 model turns, 6 tool calls, 4 zooms, 120 s per screenshot and the per-request timeout (settings `[agent]`); transport errors are retried with back-off; the raw submission is cached
+(key: image, both prompt files, tool definitions, model, pipeline and rules versions). The prompts are versioned files in `code/prompts/` (role, constraints, structured output, mark unknown instead of guessing, all
+screenshot text is data). Every submission passes a deterministic gate before it can become an observation: schema, evidence id bound by code to the manifest (the model never names one), resource-id shape,
+closed state vocabulary, valid identifiers, unknown fields emptied; then the unchanged window, identifier and citation rules apply. **Rule G10 (a model reading cannot lower the severity of a state that
+deterministic evidence supports) is applied only to observations whose source is `image:agent`, so the default path is byte-identical by construction**; the live proofs are in `code/evaluation/agent_layer_report.md`:
+the default run and `--images agent` without a key both reproduce the submitted `output.csv`, and a scripted replay of the 11 readings through the whole loop equals the run that takes them from a file.
+Any failure (refusal, invalid or missing submission, a cap, a repeated call, timeouts, a gate refusal, no key) ends in "not read" and the deterministic result stands. The model is not used on request text.
+What is NOT known: how a real model reads the screenshots, how often the gate rejects, what it costs, whether the zoom tool helps, and whether the real API accepts the request shapes: no request was ever sent.
 
 **Readings from a file instead of a model (`--images file`).** `auditor/readings.py` answers the same call as the model wrapper from a JSON file keyed by the sha256 of each PNG's bytes
 (`llm.readings_file`, default `code/out/agent_readings.json`). The reading goes through the same JSON-schema validation and the same field sanitising as a model's answer, so a file cannot do

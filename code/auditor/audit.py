@@ -258,7 +258,9 @@ class Auditor:
         # ---- state at audit_at
         states: dict[str, ResourceState] = {}
         for rid in resources:
-            st = resolve(self.link.by_resource.get(rid, []), t0, audit_at)
+            gate_log: list[str] = []
+            st = resolve(self.link.by_resource.get(rid, []), t0, audit_at, gate_log)
+            notes.extend(gate_log)                                   # empty unless the agent layer's gate rule G10 acted
             if st is not None:
                 states[rid] = st
         # an account known only from the activity stream has no observation: treat as absent (claim) and cite the activity id

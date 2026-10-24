@@ -71,12 +71,12 @@ Hold-out (cases whose resource is linked explicitly are hidden, the real code ru
 
 ## 5. Test suite
 
-* **308 tests, 0 failures, 0 errors, 0 skipped** (`python3 -m unittest discover -s code/tests -t code`)
-* per file: test_architecture 7, test_classify 8, test_determinism 5, test_edge_regressions 18, test_edge_sweep 5, test_explain 14, test_extra_cases 9, test_failure_modes 3, test_file_readings 11, test_golden_categories 19, test_image_concurrency 18, test_invariants 9, test_llm_images 16, test_mutation_definitions 3, test_no_hardcoding 3, test_outio 3, test_package 12, test_pipeline 33, test_repo_hygiene 3, test_reports_markdown 3, test_resume 13, test_robustness 32, test_schema 5, test_score 10, test_show_image_readings 4, test_usage_report 5, test_validate 15, test_versions_settings 22
+* **379 tests, 0 failures, 0 errors, 0 skipped** (`python3 -m unittest discover -s code/tests -t code`)
+* per file: test_agent_cli 7, test_agent_docs 2, test_agent_gate 16, test_agent_loop 30, test_agent_prompts 6, test_agent_tools 10, test_architecture 7, test_classify 8, test_determinism 5, test_edge_regressions 18, test_edge_sweep 5, test_explain 14, test_extra_cases 9, test_failure_modes 3, test_file_readings 11, test_golden_categories 19, test_image_concurrency 18, test_invariants 9, test_llm_images 16, test_mutation_definitions 3, test_no_hardcoding 3, test_outio 3, test_package 12, test_pipeline 33, test_repo_hygiene 3, test_reports_markdown 3, test_resume 13, test_robustness 32, test_schema 5, test_score 10, test_show_image_readings 4, test_usage_report 5, test_validate 15, test_versions_settings 22
 
 ## 6. Packaging dry run (`python3 code/tools/package.py --dry-run`)
 
-* 105 files, 1148 KiB uncompressed; by extension (none) 1, .json 1, .md 21, .py 80, .toml 1, .txt 1
+* 120 files, 1265 KiB uncompressed; by extension (none) 1, .json 1, .md 24, .py 92, .toml 1, .txt 1
 * violations: **0** ; not yet present (Phase 5): []
 * names in the zip starting with `dataset/`: 0; nested archives: 0; `.env*`: 0; `prices.json`: 0; `code/out/`: 0
 * excluded by rule: `dataset/`, `.env*`, `code/out/`, `code/.cache/`, `code/config/prices.json`, `__pycache__`, virtualenvs, agent traces, `log.txt`, `output.csv`, nested archives

@@ -27,6 +27,8 @@ flowchart TD
     EVF -. "PNG screenshots, optional" .-> VLM["llm.py: vision model only describes, results cached"]
     VLM --> PARSE
     RDG["readings.py: a file of readings keyed by PNG hash, same validation and sanitising, optional"] -.-> PARSE
+    AGT["agent/: bounded tool loop zoom_region and submit_reading, opt-in, fake-tested only"] --> GATE["agent/gate.py: G1 to G7"]
+    GATE -.-> PARSE
     PARSE --> OBS["uniform observations: resource, category, state, identifiers, capture time"]
     IDR --> LINK["link: exact identifier match only"]
     OBS --> LINK
@@ -64,6 +66,7 @@ Reading the diagram: solid arrows carry data, dotted arrows carry configuration,
 | `auditor/dataset.py` | typed, lenient CSV loading; a bad row is reported, never fatal | |
 | `auditor/evidence/*` | one parser per format into uniform observations; `load.py` walks the manifest in order; `imageobs.py` turns a validated screenshot reading into observations; `imagejobs.py` runs the screenshot reads concurrently and replays them in manifest order | judging compliance |
 | `auditor/readings.py` | a readings FILE (JSON keyed by the sha256 of each PNG) that answers the same call as `llm.py`: the same schema validation, the same downstream sanitising, provider `file` in the usage log; used only with `--images file` | making a reading up for an image whose hash is not in the file |
+| `auditor/agent/` (`loop.py`, `tools.py`, `gate.py`, `prompts.py`), `code/prompts/*.md` | the opt-in screenshot reader: a bounded loop (5 turns, 6 tool calls, 4 zooms, 120 s) with two read-only tools, versioned prompt files, a deterministic gate (schema, manifest-bound evidence id, id shape, vocabulary, identifiers, unknown fields), fallback to "not read" on any failure; observations tagged `image:agent` | deciding anything; using the model on request text; any lookup tool |
 | `auditor/llm.py` | the only module that talks to a model: schema validation, one re-ask, fallback model, backoff with `Retry-After`, shared pause after a 429, per-request timeout, on-disk cache keyed by image, prompt text, model, schema, pipeline version and rules digest, usage log | prices (they come from `config/prices.json`, never from code) |
 | `auditor/link.py` | ties a resource to a user by exact identifier, resource id or catalog link; remembers which file made each link | state, and never names |
 | `auditor/discover.py` | finds the deleted accounts and anonymized analytics records that carry no identifier, from the deletion worker's activity timeline, by elimination across all cases; time indexes and an inverted index keep it near linear | state of any resource |
@@ -103,6 +106,7 @@ Each row is exercised by a test (file in the last column, all under `code/tests/
 | `deletion_rules.csv` missing, without `required_action`, or with an unknown action | stops with a message naming the file or rule, exit code 2, nothing written | `test_edge_regressions` |
 | `--images file` with an unusable readings file; an image whose hash is not in it; readings made for another prompt version; a reading that does not fit the schema | exit code 2; "not read"; "not read"; schema error then "not read" | `test_file_readings`, `test_edge_sweep` |
 | any other awkward input of the 118-scenario sweep (empty fields, bad times, duplicate ids, e-mail spelling, old e-mails, shared `reported_at`, corrupt files and PNGs, injection) | the expected behaviour stated in `code/evaluation/edge_case_sweep.md` | `test_edge_sweep` |
+| the agent loop: invalid submission, refusal, timeout, 429, iteration / tool-call / zoom cap, wall-clock budget, a repeated call, an unknown tool, a fake evidence id, injection strings in any field, no key, no Pillow | the loop ends in "not read" (after one re-ask / the fallback model where that applies) or the offending value is dropped by the gate; the deterministic result stands; tokens spent are logged | `test_agent_loop`, `test_agent_gate`, `test_agent_tools`, `test_agent_cli` |
 | the run is killed | finished cases are on disk; the next run with the same inputs, versions and settings audits only the missing ones and writes the same `output.csv` | `test_resume` |
 | the checkpoint is torn, damaged, or made for other inputs, versions or settings | the damaged tail is dropped and redone; a foreign checkpoint is discarded and said so | `test_resume` |
 | a settings file or `--set` has an unknown key, wrong type or out-of-range value | error on stderr, exit code 2, nothing written | `test_versions_settings` |
@@ -111,7 +115,7 @@ Each row is exercised by a test (file in the last column, all under `code/tests/
 | evidence captured after `audit_at` | may tie a resource to the person; never gives a state and is never cited | `test_pipeline` |
 | the timing heuristics do not hold on other data | not detected by the program; they can be switched off with `--no-timing-heuristics` (see D3); the switch is tested, their validity on other data is not | `test_versions_settings` |
 
-Not covered by any test or measurement: a vision model's real accuracy, variance and cost (no API key was available; the final run made 0 model calls), and behaviour on another dataset instance.
+Not covered by any test or measurement: a vision model's real accuracy, variance and cost (no API key was available; the final run made 0 model calls), whether the real API accepts the agent layer's requests (never sent), and behaviour on another dataset instance. Agent layer built and tested with fakes only; 0 calls, 0 tokens, no cost.
 
 ## 4. Measured performance
 
@@ -163,3 +167,11 @@ From `code/evaluation/performance_report.md` (median of 3 fresh-process runs per
 * **Decision.** A resource enters a case only through an exact identifier: email, user id, email hash, phone, a resource id the data catalog ties to the person, or a worker event that the timeline discovery assigns under D2. Names and look-alike addresses never match. A resource with no such link produces no step, even if it looks plausible.
 * **Consequences.** The categories that exist only as noise rows (284 cache-entry ids and 368 delivery-log ids; product telemetry has no records at all) never produce steps (`code/NOTES.md`). Evidence captured after `audit_at` may supply a link but never a state or a citation; this is why a case whose own account was linked only by a later snapshot still keeps it. Hiding that late link measurably hurts: step F1 on the samples falls from 99.2% to 96.3% (`evaluation_report.md` section 5.1).
 * **Rejected.** Matching by name or similarity: more recall, but a wrong deletion finding about another person is worse than a missing one.
+
+### D5. A bounded, opt-in agent layer for the screenshots, with a gate
+
+* **Context.** Eleven screenshots are the only evidence that is pixels. A model is the one component that can read them; nothing else in the pipeline needs one (all 550 real requests are decided by rules, none is ambiguous).
+* **Decision.** An opt-in tool-calling reader (`--images agent`): two read-only tools (`zoom_region` on the same screenshot, `submit_reading`), code-enforced caps, versioned prompts, caching, and a deterministic gate between the model and the audit. The model describes; the gate and the unchanged pipeline decide. The only rule that can change a state, G10, applies only to model-sourced observations, so the default path is byte-identical by construction.
+* **Evidence.** The default run and `--images agent` without a key reproduce the submitted `output.csv` (sha256 `4676156f...`); a scripted replay of the 11 readings through the whole loop equals the run that takes them from a file (`f86e7d6f...`); 69 fake-client tests (`code/evaluation/agent_layer_report.md`). **Agent layer built and tested with fakes only; 0 calls, 0 tokens, no cost.**
+* **Cost and risk.** No real model has ever run it: its accuracy, variance, cost, gate rejection rate and the real API's acceptance of the request shapes are unknown, and whether `zoom_region` helps is untested. It adds code that has only been exercised by fakes.
+* **Rejected.** A model on request text (zero ambiguous requests to measure it on); an identity or catalog lookup tool (the model could probe it until a transcription matches a known person); a confidence score (uncalibrated); a model in linking, discovery or policy.

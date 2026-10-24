@@ -52,14 +52,26 @@ def _file_readings(st, usage_path):
     return FileReadings(Path(st.readings_file) if st.readings_file else DEFAULT_READINGS, UsageLog(usage_path))
 
 
+def _agent_reader(st, stamp, usage_path, dataset: Path):
+    """The bounded tool-calling screenshot reader (auditor/agent, `--images agent`). Without a key every screenshot is "not read" and the deterministic result stands."""
+    from auditor.agent.loop import AgentImageReader, AgentLimits
+    from auditor.evidence.load import manifest_rows
+    ids = {Path(dataset) / r["file_path"]: r["file_id"] for r in manifest_rows(dataset)}
+    limits = AgentLimits(st.agent_max_iterations, st.agent_max_tool_calls, st.agent_max_zooms, st.agent_wall_seconds, st.agent_zoom_max_px)
+    return AgentImageReader(_make_llm(st, stamp, usage_path), ids, limits)
+
+
 def _explain(a, cfg, st, stamp) -> int:
     """--explain: build the auditor exactly as a normal run does, print the explanation, write nothing (no output.csv, notes or usage log)."""
     from auditor.explain import explain
-    if st.images in ("on", "file"):
+    if st.images in ("on", "file", "agent"):
         import tempfile
         tmp_usage = Path(tempfile.mkdtemp()) / "explain_usage.jsonl"                              # the usage of an explanation is not part of any run's log
-        source = _make_llm(st, stamp, tmp_usage) if st.images == "on" else _file_readings(st, tmp_usage)
-        cfg.image_extractor = lambda path, system, instruction, schema, version: source.read_image_json("image", path, system, instruction, schema, version)
+        if st.images == "agent":
+            cfg.image_extractor = _agent_reader(st, stamp, tmp_usage, a.dataset)
+        else:
+            source = _make_llm(st, stamp, tmp_usage) if st.images == "on" else _file_readings(st, tmp_usage)
+            cfg.image_extractor = lambda path, system, instruction, schema, version: source.read_image_json("image", path, system, instruction, schema, version)
     auditor = Auditor(a.dataset, cfg)
     try:
         sys.stdout.write(explain(auditor, a.explain))
@@ -84,9 +96,10 @@ def _run(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-timing-heuristics", action="store_true",
                     help="disable the two second-of-minute heuristics (account offsets, analytics 40/41 s offset); they exploit this dataset's event timing")
     ap.add_argument("--cohort-filter", action="store_true", help="ablation only: narrow ambiguous accounts by cohort snapshot (measured harmful, off by default)")
-    ap.add_argument("--images", choices=["auto", "on", "off", "file"], default=None,
+    ap.add_argument("--images", choices=["auto", "on", "off", "file", "agent"], default=None,
                     help="read the PNG evidence with a vision model (needs ANTHROPIC_API_KEY); auto = only when a key is set; file = take the readings from a readings file "
-                         "(settings llm.readings_file, default code/out/agent_readings.json; auditor/readings.py) instead of a model (default: settings llm.images)")
+                         "(settings llm.readings_file, default code/out/agent_readings.json; auditor/readings.py) instead of a model; "
+                         "agent = the bounded tool-calling reader of auditor/agent (needs a key, limits in settings [agent]) (default: settings llm.images)")
     ap.add_argument("--explain", metavar="CASE_ID", help="print how this one case got its answer (identity, evidence, rule, why each step exists or is omitted) and exit; "
                     "read-only: writes no output file, notes or usage log; screenshots are read only with --images on")
     ap.add_argument("--restart", action="store_true", help="ignore a checkpoint left by an interrupted run and audit every case again")
@@ -119,9 +132,14 @@ def _run(argv: list[str] | None = None) -> int:
     key_present = bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))      # presence only, never the value
     images_by_model = st.images == "on" or (st.images == "auto" and key_present)
     images_from_file = st.images == "file"
-    images_on = images_by_model or images_from_file                  # some source reads the screenshots
+    images_by_agent = st.images == "agent"
+    images_on = images_by_model or images_from_file or images_by_agent          # some source reads the screenshots
     readings = None
-    if images_by_model:
+    agent = None
+    if images_by_agent:
+        agent = _agent_reader(st, stamp, usage_path, a.dataset)
+        cfg.image_extractor = agent
+    elif images_by_model:
         llm = _make_llm(st, stamp, usage_path)
         cfg.image_extractor = lambda path, system, instruction, schema, version: llm.read_image_json("image", path, system, instruction, schema, version)
     elif images_from_file:
@@ -147,7 +165,8 @@ def _run(argv: list[str] | None = None) -> int:
 
     import hashlib
     from auditor.llm import UsageLog
-    UsageLog(usage_path).add({"kind": "run_info", "images_read_by_model": images_by_model, "images_read_from_file": images_from_file,
+    UsageLog(usage_path).add({"kind": "run_info", "images_read_by_model": images_by_model or images_by_agent, "images_read_by_agent": images_by_agent, "images_read_from_file": images_from_file,
+                              "agent_screenshots_read": agent.stats["read"] if agent else 0, "agent_screenshots_failed": agent.stats["failed"] if agent else 0,
                               "readings_file": readings.describe() if readings else "", "api_key_present": key_present, "requests": len(results), "output_file": a.out.name,
                               "output_sha256": hashlib.sha256(a.out.read_bytes()).hexdigest(), "status_counts": dict(Counter(x.status for x in results)),
                               "provisional_rows": [x.case_id for x in results if x.provisional], "stamp": stamp,
@@ -158,6 +177,10 @@ def _run(argv: list[str] | None = None) -> int:
              f"evidence warnings: {len(auditor.base.warnings)}", ""]
     notes += [f"* {w}" for w in auditor.base.warnings[:50]]
     notes += [f"* {w}" for w in auditor.res.warnings[:20]]
+    if agent is not None:
+        notes += ["", "## Agent layer (`--images agent`): what the gate did", "",
+                  f"screenshots read: {agent.stats['read']}, loops that ended without a reading: {agent.stats['failed']}; limits {agent.limits}", ""]
+        notes += [f"* {n}" for n in sorted(agent.notes)[:100]]
     notes += [f"* request file line {b.line} ({b.case_id or 'no case_id'}): {b.reason}" for b in ds.bad_rows]
     provisional = [x for x in results if x.provisional]
     notes += ["", f"## Provisional rows ({len(provisional)}): built from structured data because the only state evidence is a screenshot that was not read", ""]

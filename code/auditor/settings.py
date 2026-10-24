@@ -59,11 +59,16 @@ class Settings:
     # [discovery] / [audit]
     tune: Tunables = field(default_factory=Tunables)
     # [llm]
-    images: str = "auto"                  # auto | on | off | file   (file = readings from a file, see auditor/readings.py)
+    images: str = "auto"                  # auto | on | off | file | agent   (file = readings from a file, see auditor/readings.py; agent = bounded tool-calling reader, auditor/agent)
     readings_file: str = ""               # "" = code/out/agent_readings.json; used only with images = file
     model: str = "claude-haiku-5-5"
     fallback_model: str = "claude-sonnet-5-5"
     cache_dir: str = ""                   # "" = code/.cache/llm
+    agent_max_iterations: int = 5         # [agent] model turns per screenshot
+    agent_max_tool_calls: int = 6         # [agent] tool calls per screenshot (a submit counts)
+    agent_max_zooms: int = 4              # [agent] zoom_region calls per screenshot
+    agent_wall_seconds: float = 120.0     # [agent] wall-clock budget per screenshot
+    agent_zoom_max_px: int = 1200         # [agent] longest side of a returned zoom, in pixels
     max_concurrency: int = 4              # screenshots read at the same time (1 = sequential); does not change the answer
     timeout_seconds: float = 60.0         # per model request; does not change the answer
 
@@ -74,6 +79,9 @@ class Settings:
             d.pop(k, None)
         if self.images in ("off", "file"):
             d.pop("model", None), d.pop("fallback_model", None)
+        if self.images != "agent":                                                                # the loop limits matter only when the loop runs
+            for k in [k for k in d if k.startswith("agent_")]:
+                d.pop(k)
         return hashlib.sha256(json.dumps(d, sort_keys=True).encode()).hexdigest()
 
 
@@ -91,7 +99,8 @@ _TUNE = {f.name for f in fields(Tunables)}
 _SECTIONS = {"pipeline": {"later_linking", "discovery", "timing_heuristics", "cohort_filter", "provisional_rows"},
              "llm": {"images", "readings_file", "model", "fallback_model", "cache_dir", "max_concurrency", "timeout_seconds"},
              "discovery": {"account_window_minutes", "analytics_window_minutes", "phase_margin", "analytics_min_llr", "chain_gaps_seconds", "chain_tolerance_seconds"},
-             "audit": {"later_link_max_days"}}
+             "audit": {"later_link_max_days"},
+             "agent": {"max_iterations", "max_tool_calls", "max_zooms", "wall_seconds", "zoom_max_px"}}
 
 
 def _coerce(name: str, current: Any, value: Any) -> Any:
@@ -125,8 +134,11 @@ def _coerce(name: str, current: Any, value: Any) -> Any:
 
 
 def _validate(s: Settings) -> Settings:
-    if s.images not in ("auto", "on", "off", "file"):
-        raise SettingsError(f"llm.images: must be auto, on, off or file, got {s.images!r}")
+    if s.images not in ("auto", "on", "off", "file", "agent"):
+        raise SettingsError(f"llm.images: must be auto, on, off, file or agent, got {s.images!r}")
+    for name, lo, hi in (("agent_max_iterations", 1, 20), ("agent_max_tool_calls", 1, 40), ("agent_max_zooms", 0, 20), ("agent_wall_seconds", 5, 1800), ("agent_zoom_max_px", 200, 2000)):
+        if not lo <= getattr(s, name) <= hi:
+            raise SettingsError(f"agent.{name[6:]}: must be between {lo} and {hi}, got {getattr(s, name)}")
     t = s.tune
     for n in ("account_window_minutes", "analytics_window_minutes"):
         lo, hi = getattr(t, n)
@@ -154,7 +166,8 @@ def apply(s: Settings, dotted: str, value: Any) -> Settings:
     if section in ("discovery", "audit"):
         new = _coerce(dotted, getattr(s.tune, key), value)
         return _validate(replace(s, tune=replace(s.tune, **{key: new})))
-    return _validate(replace(s, **{key: _coerce(dotted, getattr(s, key), value)}))
+    field_name = f"agent_{key}" if section == "agent" else key
+    return _validate(replace(s, **{field_name: _coerce(dotted, getattr(s, field_name), value)}))
 
 
 def from_file(path: Path | None = None, base: Settings | None = None) -> Settings:
@@ -202,7 +215,7 @@ def as_table(s: Settings) -> list[tuple[str, str]]:
     rows = []
     for sec, keys in _SECTIONS.items():
         for k in sorted(keys):
-            v = getattr(s.tune, k) if sec in ("discovery", "audit") else getattr(s, k)
+            v = getattr(s.tune, k) if sec in ("discovery", "audit") else getattr(s, f"agent_{k}" if sec == "agent" else k)
             rows.append((f"{sec}.{k}", json.dumps(list(v) if isinstance(v, tuple) else v)))
     return rows
 
