@@ -1,0 +1,32 @@
+# Submission checklist (prepared in Phase 1; verified item by item in Phase 5)
+
+Automatic verification of everything a program can check: `python3 code/tools/final_check.py --build-zip --expect-log-turns 6` (prints a Markdown checklist, items it cannot verify are marked NOT VERIFIED).
+
+**Exact files to upload:** `code.zip` (built by `python3 code/tools/package.py --require-final`, repository root) - `output.csv` (repository root) - `log.txt` (repository root, as the chat transcript) - `agent-trace.zip` (you export it, steps below). The AI interview uses `code/INTERVIEW_PREP.md`.
+
+## Files to upload
+- [ ] `code.zip` - built from the repo root with `python3 code/tools/package.py --require-final` (checks every rule below first; `--dry-run` lists without writing). Must contain `README.md`, `code/` (incl. `code/evaluation/evaluation_report.md` and `code/evaluation/usage_report.md`).
+- [ ] `output.csv` - root-level, 518 data rows + header, row order = `dataset/deletion_requests.csv`, passes `auditor.validate.validate_output_file`.
+- [ ] `chat_transcript` = root `log.txt` (append-only; every entry has non-empty `tool=` and `model=`).
+- [ ] `agent-trace.zip` (you export it yourself; steps below).
+- [ ] AI interview: `code/INTERVIEW_PREP.md` (Phase 5).
+
+## code.zip must NOT contain
+- [ ] `dataset/` (already tracked in the repo by the starter commit - the zip command must exclude it)  - [ ] `.env` / keys  - [ ] `.venv`/`venv`/`node_modules`/`__pycache__`
+- [ ] nested archives (`.zip .tar .gz .tgz .7z .rar`)  - [ ] `code/out/`, `code/.cache/`  - [ ] real personal data
+- [ ] Reports are Markdown (the code judge ignores `.csv .tsv .json .jsonl .sql .log`)
+
+## Agent trace (`agent_trace_instructions.md`) - you do this at the very end
+1. Finish the session(s) and quit Claude Code first (so files are fully written).
+2. Create a temp folder `agent-trace/claude-code/`.
+3. In each session run `/export` and save the readable transcript into that folder.
+4. Copy the raw session JSONL files for this repo from `~/.claude/projects/` (folder name encodes the path; check timestamps) into `agent-trace/claude-code/`. This cloud session may keep its transcript on the claude.ai side: if there is no local JSONL, use the interface's export and say so ("hosted session, no local trace file").
+5. Do NOT copy `auth.json`, `settings.json`, credentials, `.env`; skim the files for secrets/personal data.
+6. `zip -r agent-trace.zip agent-trace` (or PowerShell `Compress-Archive`), open it once to check contents.
+7. If you used another harness (Codex, etc.) add its own subfolder.
+
+## Final-run rules
+- [ ] `usage_report.md` comes from a cold-cache full run of all 518 cases; prices only from your own file (`code/config/prices.json`, per model: rates + source URL + date) or the report says "cost not computed - prices not supplied".
+  Sequence (in your own shell; the key is never written to a file): `export ANTHROPIC_API_KEY=...` -> `python3 code/evaluation/show_image_readings.py` (look at the 11 pictures next to the readings; open `code/out/image_readings.html`)
+  -> `rm -rf code/.cache/llm code/out/usage_log.jsonl` -> `python3 code/main.py` -> `python3 code/evaluation/usage_report.py --final`.
+- [ ] Submission URL taken from your registration email (not from AGENTS.md).
