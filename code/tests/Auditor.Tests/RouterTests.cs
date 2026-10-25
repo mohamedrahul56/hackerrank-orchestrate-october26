@@ -9,7 +9,7 @@ public abstract class RouterBase : IDisposable
     protected readonly TempDir Tmp = new();
     public void Dispose() => Tmp.Dispose();
 
-    protected static Dictionary<string, object?> Reading() => (Dictionary<string, object?>)Py.ParseJson(
+    protected static Dictionary<string, object?> Reading() => (Dictionary<string, object?>)Compat.ParseJson(
         "{\"screen\": \"x\", \"records\": [{\"resource_id\": \"search_1\", \"selected\": true, \"emails\": [], \"user_ids\": [\"user_1\"], \"phones\": [], \"status_words\": [\"Live\"], \"shows_direct_identifiers\": false, \"aliases\": []}]}")!;
 
     protected string MakeRoot(params (string Name, byte[] Data)[] files)

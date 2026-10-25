@@ -26,7 +26,7 @@ public static class Loaders
     /// <summary>Execute an evidence SQL snapshot in an in-memory SQLite database and return every table as a list of rows.</summary>
     public static List<(string Name, List<Dictionary<string, object?>> Rows)> ReadSqlTables(string path)
     {
-        var script = Py.ReadText(path);
+        var script = Compat.ReadText(path);
         using var con = new SqliteConnection("Data Source=:memory:");
         con.Open();
         raw.sqlite3_set_authorizer(con.Handle, AuthorizerDelegate, null);
@@ -76,18 +76,18 @@ public static class Loaders
     {
         try
         {
-            var rec = Py.AsDict(recObj);
-            var rid = Py.Get(rec, "resource_id");
-            if (collection is not string coll || !Records.CollectionRules.TryGetValue(coll, out var rule) || !Py.Truthy(rid)) return;
-            if (rid is not string rids) throw new DataException($"resource_id must be text, got {Py.TypeName(rid)}");
+            var rec = Compat.AsDict(recObj);
+            var rid = Compat.Get(rec, "resource_id");
+            if (collection is not string coll || !Records.CollectionRules.TryGetValue(coll, out var rule) || !Compat.Truthy(rid)) return;
+            if (rid is not string rids) throw new DataException($"resource_id must be text, got {Compat.TypeName(rid)}");
             DateTime? until = null;
-            if (Py.Truthy(Py.Get(rec, "retained_until")))
+            if (Compat.Truthy(Compat.Get(rec, "retained_until")))
             {
-                var rawUntil = Py.Str(rec["retained_until"]);
-                try { until = Py.ParseTs(rawUntil); }
+                var rawUntil = Compat.Str(rec["retained_until"]);
+                try { until = Compat.ParseTs(rawUntil); }
                 catch (DataException)                                   // an unreadable end date is "no end date stated" (the hold stays active), not a lost record
                 {
-                    b.Warnings.Add($"{fileId}: {rids}: retained_until {Py.StrRepr(rawUntil.Length > 30 ? rawUntil[..30] : rawUntil)} is not a time; treated as no end date");
+                    b.Warnings.Add($"{fileId}: {rids}: retained_until {Compat.StrRepr(rawUntil.Length > 30 ? rawUntil[..30] : rawUntil)} is not a time; treated as no end date");
                 }
             }
             b.Obs.Add(new Obs(fileId, fileT, t, !string.IsNullOrEmpty(system) ? system : Records.SystemFor(rids), rids, rule.Category, rule.State(rec),
@@ -95,7 +95,7 @@ public static class Loaders
         }
         catch (DataException e)                                          // one malformed record must not cost the rest of the file
         {
-            b.Warnings.Add($"{fileId}: a record in {Py.Str(collection)} skipped (DataError: {e.Message})");
+            b.Warnings.Add($"{fileId}: a record in {Compat.Str(collection)} skipped (DataError: {e.Message})");
         }
     }
 
@@ -108,7 +108,7 @@ public static class Loaders
             {
                 foreach (var r in rows)
                 {
-                    try { b.Coverage.Add(new Coverage(fileId, fileT, Py.ParseTsValue(Py.Req(r, "captured_at")), Py.Str(Py.Req(r, "origin_system")), "sql:snapshot_scope")); }
+                    try { b.Coverage.Add(new Coverage(fileId, fileT, Compat.ParseTsValue(Compat.Req(r, "captured_at")), Compat.Str(Compat.Req(r, "origin_system")), "sql:snapshot_scope")); }
                     catch (DataException e) { b.Warnings.Add($"{fileId}: a snapshot_scope row skipped (DataError: {e.Message})"); }
                 }
                 continue;
@@ -117,13 +117,13 @@ public static class Loaders
             {
                 try
                 {
-                    var updated = Py.Get(r, "updated_at");
-                    var t = Py.Truthy(updated) ? Min(Py.ParseTsValue(updated), fileT) : fileT;
+                    var updated = Compat.Get(r, "updated_at");
+                    var t = Compat.Truthy(updated) ? Min(Compat.ParseTsValue(updated), fileT) : fileT;
                     if (r.ContainsKey("record_json"))                      // replica/primary tables: JSON payload + collection name
                     {
-                        var rec = Py.ParseJson(Py.Req(r, "record_json") as string ?? throw new DataException("record_json must be text"));
-                        var origin = Py.Get(r, "origin_system");
-                        RecordObs(b, fileId, fileT, t, Py.Req(r, "collection_name"), rec, $"sql:{name}", Py.Truthy(origin) ? Py.Str(origin) : null);
+                        var rec = Compat.ParseJson(Compat.Req(r, "record_json") as string ?? throw new DataException("record_json must be text"));
+                        var origin = Compat.Get(r, "origin_system");
+                        RecordObs(b, fileId, fileT, t, Compat.Req(r, "collection_name"), rec, $"sql:{name}", Compat.Truthy(origin) ? Compat.Str(origin) : null);
                     }
                     else RecordObs(b, fileId, fileT, t, name, NormaliseTypedRow(name, r), $"sql:{name}");
                 }
@@ -142,7 +142,7 @@ public static class Loaders
     {
         var r = new Dictionary<string, object?>(row, StringComparer.Ordinal);
         if (table is "customer_profiles" or "customer_profiles_primary" or "customer_profiles_failover_replica")
-            r.TryAdd("customer_reference", Py.Get(r, "user_id"));
+            r.TryAdd("customer_reference", Compat.Get(r, "user_id"));
         if (table == "support_records") r["message_text"] = r.TryGetValue("message_excerpt", out var ex) ? ex : "";
         if (table == "customer_exports") r["download_available"] = true;
         return r;
@@ -152,9 +152,9 @@ public static class Loaders
     /// <summary>service_resource_export_*: per-service lists of point-in-time lookups, each with its own observed_at.</summary>
     private static void WalkServiceExport(EvidenceBase b, string fileId, DateTime fileT, Dictionary<string, object?> doc)
     {
-        foreach (var (svc, lists) in Py.AsDict(doc["service_exports"]))
-            foreach (var (listName, items) in Py.AsDict(lists))
-                foreach (var it in Py.Iterate(items))
+        foreach (var (svc, lists) in Compat.AsDict(doc["service_exports"]))
+            foreach (var (listName, items) in Compat.AsDict(lists))
+                foreach (var it in Compat.Iterate(items))
                 {
                     try { WalkItem(b, fileId, fileT, svc, listName, it); }
                     catch (DataException e) { b.Warnings.Add($"{fileId}: an item of {svc}.{listName} skipped (DataError: {e.Message})"); }
@@ -163,26 +163,26 @@ public static class Loaders
 
     private static void WalkItem(EvidenceBase b, string fileId, DateTime fileT, string svc, string listName, object? it)
     {
-        var rid = Py.Get(it, "resource_id");
-        if (!Py.Truthy(rid)) return;
-        if (rid is not string ridText) throw new DataException($"resource_id must be text, got {Py.TypeName(rid)}");
-        var observed = Py.Get(it, "observed_at");
-        var t = Py.Truthy(observed) ? Min(Py.ParseTsValue(observed), fileT) : fileT;
+        var rid = Compat.Get(it, "resource_id");
+        if (!Compat.Truthy(rid)) return;
+        if (rid is not string ridText) throw new DataException($"resource_id must be text, got {Compat.TypeName(rid)}");
+        var observed = Compat.Get(it, "observed_at");
+        var t = Compat.Truthy(observed) ? Min(Compat.ParseTsValue(observed), fileT) : fileT;
         var src = $"json:{svc}.{listName}";
         switch (listName)
         {
             case "profile_lookups":
-                var prof = Py.Get(it, "profile");
-                bool present = Py.EqualsNumber(Py.Get(it, "status_code"), 200) && prof is not null;
-                b.Obs.Add(new Obs(fileId, fileT, t, svc, ridText, "USER_PROFILE", present ? "PRESENT" : "ABSENT", Records.IdentsFrom(Records.Flatten(Py.Truthy(prof) ? prof : new Dictionary<string, object?>())), src));
+                var prof = Compat.Get(it, "profile");
+                bool present = Compat.EqualsNumber(Compat.Get(it, "status_code"), 200) && prof is not null;
+                b.Obs.Add(new Obs(fileId, fileT, t, svc, ridText, "USER_PROFILE", present ? "PRESENT" : "ABSENT", Records.IdentsFrom(Records.Flatten(Compat.Truthy(prof) ? prof : new Dictionary<string, object?>())), src));
                 break;
             case "index_queries":
-                var hits = Py.Or(Py.Get(it, "hits"), new Dictionary<string, object?>());
-                var docs = Py.Or(Py.Get(hits, "documents"), new List<object?>());
-                var total = Py.Has(hits, "total") ? Py.Get(hits, "total") : (long)Py.Len(docs);
-                bool found = Py.GreaterThanZero(total);
+                var hits = Compat.Or(Compat.Get(it, "hits"), new Dictionary<string, object?>());
+                var docs = Compat.Or(Compat.Get(hits, "documents"), new List<object?>());
+                var total = Compat.Has(hits, "total") ? Compat.Get(hits, "total") : (long)Compat.Len(docs);
+                bool found = Compat.GreaterThanZero(total);
                 var idents = new HashSet<string>(Records.IdentsFrom(Records.Flatten(docs)), StringComparer.Ordinal);
-                idents.UnionWith(Records.IdentsFrom(new[] { ("query", Py.Str(Py.Or(Py.Get(it, "query"), ""))) }));
+                idents.UnionWith(Records.IdentsFrom(new[] { ("query", Compat.Str(Compat.Or(Compat.Get(it, "query"), ""))) }));
                 b.Obs.Add(new Obs(fileId, fileT, t, svc, ridText, "SEARCH_INDEX_ENTRY", found ? "PRESENT" : "ABSENT", idents, src));
                 break;
             case "profiles": RecordObs(b, fileId, fileT, t, "customer_analytics_reports", it, src, svc); break;
@@ -201,15 +201,15 @@ public static class Loaders
             b.Warnings.Add($"{fileId}: unknown lookup ({recordType}, {result}) for {rid}");
             return;
         }
-        if (who is not string subject) throw new DataException($"subject must be text, got {Py.TypeName(who)}");
+        if (who is not string subject) throw new DataException($"subject must be text, got {Compat.TypeName(who)}");
         b.Obs.Add(new Obs(fileId, fileT, t, system, rid, recordType, state, Records.IdentsFrom(new[] { ("subject", subject) }), source));
     }
 
-    private static string Text(object? v, string what) => v as string ?? throw new DataException($"{what} must be text, got {Py.TypeName(v)}");
+    private static string Text(object? v, string what) => v as string ?? throw new DataException($"{what} must be text, got {Compat.TypeName(v)}");
 
     public static void LoadJson(EvidenceBase b, string fileId, string path, DateTime fileT)
     {
-        var parsed = Py.ParseJson(Py.ReadText(path));
+        var parsed = Compat.ParseJson(Compat.ReadText(path));
         if (parsed is not Dictionary<string, object?> doc)
         {
             b.Warnings.Add($"{fileId}: {Path.GetFileName(path)} is not a JSON object");
@@ -225,20 +225,20 @@ public static class Loaders
         if (doc.ContainsKey("service_exports")) { WalkServiceExport(b, fileId, fileT, doc); return; }
         if (doc.ContainsKey("snapshots"))                                     // bundle: several dated snapshots in one file
         {
-            foreach (var snap in Py.Iterate(doc["snapshots"])) Guarded("a snapshot", () => LoadSnapshot(b, fileId, fileT, snap));
+            foreach (var snap in Compat.Iterate(doc["snapshots"])) Guarded("a snapshot", () => LoadSnapshot(b, fileId, fileT, snap));
             return;
         }
         if (doc.ContainsKey("records") && doc.ContainsKey("collection"))      // hand-made single-collection files
         {
-            var t = Py.ParseTsValue(Py.Req(doc, "captured_at"));
-            foreach (var rec in Py.Iterate(doc["records"]))
-                RecordObs(b, fileId, fileT, t, doc["collection"], rec, $"json:{Py.Str(doc.TryGetValue("source", out var so) ? so : "")}.{Py.Str(doc["collection"])}");
+            var t = Compat.ParseTsValue(Compat.Req(doc, "captured_at"));
+            foreach (var rec in Compat.Iterate(doc["records"]))
+                RecordObs(b, fileId, fileT, t, doc["collection"], rec, $"json:{Compat.Str(doc.TryGetValue("source", out var so) ? so : "")}.{Compat.Str(doc["collection"])}");
             return;
         }
         if (doc.ContainsKey("records"))                                       // ledgers / manifests / connector configs
         {
-            var t = Py.ParseTsValue(Py.Req(doc, "exported_at"));
-            foreach (var rec in Py.Iterate(doc["records"])) Guarded("a ledger record", () => LoadLedgerRecord(b, fileId, fileT, t, doc, rec, path));
+            var t = Compat.ParseTsValue(Compat.Req(doc, "exported_at"));
+            foreach (var rec in Compat.Iterate(doc["records"])) Guarded("a ledger record", () => LoadLedgerRecord(b, fileId, fileT, t, doc, rec, path));
             return;
         }
         b.Warnings.Add($"{fileId}: unrecognised JSON layout in {Path.GetFileName(path)}");
@@ -246,40 +246,40 @@ public static class Loaders
 
     private static void LoadSnapshot(EvidenceBase b, string fileId, DateTime fileT, object? snap)
     {
-        var t = Py.ParseTsValue(Py.Req(snap, "captured_at"));
-        var coll = Py.Req(snap, "collection");
-        var store = Py.Req(snap, "data_store");
+        var t = Compat.ParseTsValue(Compat.Req(snap, "captured_at"));
+        var coll = Compat.Req(snap, "collection");
+        var store = Compat.Req(snap, "data_store");
         if (coll is "operational_record_history")                             // lookup vocabulary
         {
-            foreach (var r in Py.Iterate(Py.Req(snap, "records")))
+            foreach (var r in Compat.Iterate(Compat.Req(snap, "records")))
             {
                 try
                 {
-                    LookupObs(b, fileId, fileT, Py.ParseTsValue(Py.Req(r, "recorded_at")), Text(Py.Req(r, "system"), "system"), Text(Py.Req(r, "resource_id"), "resource_id"),
-                              Text(Py.Req(r, "record_type"), "record_type"), Text(Py.Req(r, "result"), "result"), Py.Has(r, "lookup_value") ? Py.Get(r, "lookup_value") : "", $"json:{Py.Str(store)}.{Py.Str(coll)}");
+                    LookupObs(b, fileId, fileT, Compat.ParseTsValue(Compat.Req(r, "recorded_at")), Text(Compat.Req(r, "system"), "system"), Text(Compat.Req(r, "resource_id"), "resource_id"),
+                              Text(Compat.Req(r, "record_type"), "record_type"), Text(Compat.Req(r, "result"), "result"), Compat.Has(r, "lookup_value") ? Compat.Get(r, "lookup_value") : "", $"json:{Compat.Str(store)}.{Compat.Str(coll)}");
                 }
                 catch (DataException e) { b.Warnings.Add($"{fileId}: a lookup record skipped (DataError: {e.Message})"); }
             }
             return;
         }
-        b.Coverage.Add(new Coverage(fileId, fileT, t, Py.Str(store), $"json:{Py.Str(store)}.{Py.Str(coll)}"));
-        foreach (var rec in Py.Iterate(Py.Req(snap, "records")))
-            RecordObs(b, fileId, fileT, t, coll, rec, $"json:{Py.Str(store)}.{Py.Str(coll)}", Py.Str(store));
+        b.Coverage.Add(new Coverage(fileId, fileT, t, Compat.Str(store), $"json:{Compat.Str(store)}.{Compat.Str(coll)}"));
+        foreach (var rec in Compat.Iterate(Compat.Req(snap, "records")))
+            RecordObs(b, fileId, fileT, t, coll, rec, $"json:{Compat.Str(store)}.{Compat.Str(coll)}", Compat.Str(store));
     }
 
     private static void LoadLedgerRecord(EvidenceBase b, string fileId, DateTime fileT, DateTime t, Dictionary<string, object?> doc, object? recObj, string path)
     {
-        var rec = Py.AsDict(recObj);
+        var rec = Compat.AsDict(recObj);
         if (rec.ContainsKey("record_type"))                                   // security_audit_ledger: lookup vocabulary
-            LookupObs(b, fileId, fileT, Py.ParseTsValue(rec.TryGetValue("recorded_at", out var ra) ? ra : doc["exported_at"]), Text(Py.Req(rec, "system"), "system"),
-                      Text(Py.Req(rec, "resource_id"), "resource_id"), Text(rec["record_type"], "record_type"), Text(Py.Req(rec, "result"), "result"),
+            LookupObs(b, fileId, fileT, Compat.ParseTsValue(rec.TryGetValue("recorded_at", out var ra) ? ra : doc["exported_at"]), Text(Compat.Req(rec, "system"), "system"),
+                      Text(Compat.Req(rec, "resource_id"), "resource_id"), Text(rec["record_type"], "record_type"), Text(Compat.Req(rec, "result"), "result"),
                       rec.TryGetValue("subject_reference", out var sr) ? sr : "", "json:ledger");
         else if (rec.ContainsKey("download_available") || rec.ContainsKey("file_name") || rec.ContainsKey("owner_email"))
             RecordObs(b, fileId, fileT, t, "customer_export_jobs", rec, "json:export_manifest");
         else if (rec.ContainsKey("connector_name"))
             RecordObs(b, fileId, fileT, t, "connector_configurations", rec, "json:connector_configurations");
         else
-            b.Warnings.Add($"{fileId}: unrecognised record in {Path.GetFileName(path)}: [{string.Join(", ", rec.Keys.OrderBy(k => k, StringComparer.Ordinal).Take(5).Select(k => Py.StrRepr(k)))}]");
+            b.Warnings.Add($"{fileId}: unrecognised record in {Path.GetFileName(path)}: [{string.Join(", ", rec.Keys.OrderBy(k => k, StringComparer.Ordinal).Take(5).Select(k => Compat.StrRepr(k)))}]");
     }
 
     // ----------------------------------------------------------------------------- text handover
@@ -287,11 +287,11 @@ public static class Loaders
 
     public static void LoadText(EvidenceBase b, string fileId, string path, DateTime fileT)
     {
-        foreach (var line in Py.SplitLines(Py.ReadText(path)))
+        foreach (var line in Compat.SplitLines(Compat.ReadText(path)))
         {
             var m = Handover.Match(line);
             if (!m.Success) continue;
-            try { LookupObs(b, fileId, fileT, Py.ParseTs(m.Groups[1].Value), m.Groups[2].Value, m.Groups[3].Value, m.Groups[4].Value, m.Groups[5].Value, m.Groups[6].Value, "txt:handover"); }
+            try { LookupObs(b, fileId, fileT, Compat.ParseTs(m.Groups[1].Value), m.Groups[2].Value, m.Groups[3].Value, m.Groups[4].Value, m.Groups[5].Value, m.Groups[6].Value, "txt:handover"); }
             catch (DataException e) { b.Warnings.Add($"{fileId}: a handover line skipped ({e.Message})"); }
         }
     }

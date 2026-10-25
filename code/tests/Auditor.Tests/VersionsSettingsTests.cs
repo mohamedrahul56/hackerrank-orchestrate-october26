@@ -117,8 +117,8 @@ public class DigestsTests
     {
         var p = Versions.Prompts()["image_reading"];
         Assert.Equal(ImageObs.PromptVersion, p.Version);
-        Assert.Equal(Versions.DigestText(ImageObs.System, ImageObs.Instruction, PyJsonSorted.Dumps(ImageObs.Schema)), p.Digest);
-        Assert.NotEqual(p.Digest, Versions.DigestText(ImageObs.System, ImageObs.Instruction + "!", PyJsonSorted.Dumps(ImageObs.Schema)));
+        Assert.Equal(Versions.DigestText(ImageObs.System, ImageObs.Instruction, SortedJson.Dumps(ImageObs.Schema)), p.Digest);
+        Assert.NotEqual(p.Digest, Versions.DigestText(ImageObs.System, ImageObs.Instruction + "!", SortedJson.Dumps(ImageObs.Schema)));
         Assert.True(Versions.Prompts().ContainsKey("agent_image_reader"));
     }
 
@@ -221,8 +221,8 @@ public class CliStampsAndOverridesTests
         Assert.Contains(ImageObs.PromptVersion, notes, StringComparison.Ordinal);
         Assert.Contains(SettingsFile.Apply(new Settings(), "llm.images", "off").Fingerprint(), notes, StringComparison.Ordinal);
         Assert.Contains("`pipeline.discovery=true`", notes, StringComparison.Ordinal);
-        var runInfo = File.ReadAllLines(Path.ChangeExtension(outPath, ".usage.jsonl")).Where(l => l.Contains("\"run_info\"", StringComparison.Ordinal)).Select(l => Py.AsDict(Py.ParseJson(l))).First();
-        Assert.Equal(Versions.RulesDigest(Repo.Dataset), Py.AsDict(runInfo["stamp"])["rules"]);
+        var runInfo = File.ReadAllLines(Path.ChangeExtension(outPath, ".usage.jsonl")).Where(l => l.Contains("\"run_info\"", StringComparison.Ordinal)).Select(l => Compat.AsDict(Compat.ParseJson(l))).First();
+        Assert.Equal(Versions.RulesDigest(Repo.Dataset), Compat.AsDict(runInfo["stamp"])["rules"]);
     }
 
     [DatasetFact]

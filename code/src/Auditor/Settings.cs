@@ -11,7 +11,7 @@ public sealed class SettingsException : Exception
     public SettingsException(string message, Exception? inner = null) : base(message, inner) { }
 }
 
-/// <summary>Numbers the activity-timeline discovery and the late-link rule depend on. Measured on this dataset (see NOTES.md 12, CHANGELOG).</summary>
+/// <summary>Numbers the activity-timeline discovery and the late-link rule depend on. Measured on this dataset (see evaluation/CHANGELOG.md).</summary>
 public sealed record Tunables
 {
     /// <summary>a deleted account's delete event relative to the case's reported_at</summary>
@@ -94,9 +94,9 @@ public static class SettingsFile
             bool b => b ? "true" : "false",
             int i => i.ToString(CultureInfo.InvariantCulture),
             long l => l.ToString(CultureInfo.InvariantCulture),
-            double d => Py.FloatRepr(d),
-            string t => Py.DumpsCompact(t),
-            (double a, double b) => $"[{Py.FloatRepr(a)}, {Py.FloatRepr(b)}]",
+            double d => Compat.FloatRepr(d),
+            string t => Compat.DumpsCompact(t),
+            (double a, double b) => $"[{Compat.FloatRepr(a)}, {Compat.FloatRepr(b)}]",
             (int a, int b) => $"[{a}, {b}]",
             var other => throw new InvalidOperationException($"unexpected setting type {other.GetType().Name}"),
         };
@@ -142,37 +142,37 @@ public static class SettingsFile
         {
             case Kind.Bool:
                 if (value is string bs && bs.ToLowerInvariant() is "true" or "false") value = bs.ToLowerInvariant() == "true";
-                return value is bool b ? b : throw new SettingsException($"{name}: expected true/false, got {Py.Repr(value)}");
+                return value is bool b ? b : throw new SettingsException($"{name}: expected true/false, got {Compat.Repr(value)}");
             case Kind.FloatPair:
             case Kind.IntPair:
                 if (value is string js)
                 {
-                    try { value = Py.ParseJson(js); }
-                    catch (DataException e) { throw new SettingsException($"{name}: expected a list like [1, 2], got {Py.Repr(js)}", e); }
+                    try { value = Compat.ParseJson(js); }
+                    catch (DataException e) { throw new SettingsException($"{name}: expected a list like [1, 2], got {Compat.Repr(js)}", e); }
                 }
                 if (value is TomlArray ta) value = ta.Select(x => (object?)x).ToList();
                 if (value is not List<object?> list || list.Count != 2 || !list.All(x => x is long or double or int))
-                    throw new SettingsException($"{name}: expected a list of 2 numbers, got {Py.Repr(value)}");
+                    throw new SettingsException($"{name}: expected a list of 2 numbers, got {Compat.Repr(value)}");
                 double x0 = System.Convert.ToDouble(list[0], CultureInfo.InvariantCulture), x1 = System.Convert.ToDouble(list[1], CultureInfo.InvariantCulture);
                 return kind == Kind.FloatPair ? (object)(x0, x1) : (object)((int)x0, (int)x1);
             case Kind.Int:
             case Kind.Float:
-                if (value is bool) throw new SettingsException($"{name}: expected a number, got {Py.Repr(value)}");
+                if (value is bool) throw new SettingsException($"{name}: expected a number, got {Compat.Repr(value)}");
                 try
                 {
                     if (kind == Kind.Float)
                         return value switch { string s => double.Parse(s.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture), long l => (double)l, double d => d, _ => throw new FormatException() };
                     return value switch { string s => long.Parse(s.Trim(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture), long l => l, double d => (long)d, _ => throw new FormatException() };
                 }
-                catch (Exception e) when (e is FormatException or OverflowException) { throw new SettingsException($"{name}: expected a number, got {Py.Repr(value)}", e); }
+                catch (Exception e) when (e is FormatException or OverflowException) { throw new SettingsException($"{name}: expected a number, got {Compat.Repr(value)}", e); }
             default:
-                return value as string ?? throw new SettingsException($"{name}: expected text, got {Py.Repr(value)}");
+                return value as string ?? throw new SettingsException($"{name}: expected text, got {Compat.Repr(value)}");
         }
     }
 
     private static Settings Validate(Settings s)
     {
-        if (s.Images is not ("auto" or "on" or "off" or "file" or "agent")) throw new SettingsException($"llm.images: must be auto, on, off, file or agent, got {Py.Repr(s.Images)}");
+        if (s.Images is not ("auto" or "on" or "off" or "file" or "agent")) throw new SettingsException($"llm.images: must be auto, on, off, file or agent, got {Compat.Repr(s.Images)}");
         foreach (var (name, lo, hi, value) in new (string, double, double, double)[]
         {
             ("max_iterations", 1, 20, s.AgentMaxIterations), ("max_tool_calls", 1, 40, s.AgentMaxToolCalls), ("max_zooms", 0, 20, s.AgentMaxZooms),
@@ -181,7 +181,7 @@ public static class SettingsFile
             if (value < lo || value > hi) throw new SettingsException($"agent.{name}: must be between {lo:0.##} and {hi:0.##}, got {value:0.##}");
         var t = s.Tune;
         foreach (var (n, win) in new[] { ("account_window_minutes", t.AccountWindowMinutes), ("analytics_window_minutes", t.AnalyticsWindowMinutes) })
-            if (win.Item1 >= win.Item2) throw new SettingsException($"discovery.{n}: the start ({Py.FloatRepr(win.Item1)}) must be before the end ({Py.FloatRepr(win.Item2)})");
+            if (win.Item1 >= win.Item2) throw new SettingsException($"discovery.{n}: the start ({Compat.FloatRepr(win.Item1)}) must be before the end ({Compat.FloatRepr(win.Item2)})");
         if (s.MaxConcurrency is < 1 or > 16) throw new SettingsException($"llm.max_concurrency: must be between 1 and 16, got {s.MaxConcurrency}");
         if (s.TimeoutSeconds <= 0) throw new SettingsException("llm.timeout_seconds: must be positive");
         if (s.MaxRunTokens < 0) throw new SettingsException($"llm.max_run_tokens: must be 0 (no limit) or positive, got {s.MaxRunTokens}");
@@ -193,12 +193,12 @@ public static class SettingsFile
     /// <summary>Return a copy of <paramref name="s"/> with one <c>section.key</c> replaced (the unit both the file loader and --set use).</summary>
     public static Settings Apply(Settings s, string dotted, object? value)
     {
-        if (!dotted.Contains('.', StringComparison.Ordinal)) throw new SettingsException($"{Py.Repr(dotted)}: use section.key, e.g. pipeline.discovery");
+        if (!dotted.Contains('.', StringComparison.Ordinal)) throw new SettingsException($"{Compat.Repr(dotted)}: use section.key, e.g. pipeline.discovery");
         var key = Keys.FirstOrDefault(k => k.Dotted == dotted);
         if (key is null)
         {
             var known = string.Join(", ", Keys.OrderBy(k => k.Section, StringComparer.Ordinal).ThenBy(k => k.Name, StringComparer.Ordinal).Select(k => k.Dotted));
-            throw new SettingsException($"unknown setting {Py.Repr(dotted)}; known settings: {known}");
+            throw new SettingsException($"unknown setting {Compat.Repr(dotted)}; known settings: {known}");
         }
         return Validate(key.Set(s, Coerce(dotted, key.Kind, value)));
     }
@@ -241,7 +241,7 @@ public static class SettingsFile
         foreach (var item in overrides ?? Array.Empty<string>())
         {
             int eq = item.IndexOf('=', StringComparison.Ordinal);
-            if (eq < 0) throw new SettingsException($"--set {Py.Repr(item)}: use section.key=value");
+            if (eq < 0) throw new SettingsException($"--set {Compat.Repr(item)}: use section.key=value");
             s = Apply(s, item[..eq].Trim(), item[(eq + 1)..].Trim());
         }
         return s;

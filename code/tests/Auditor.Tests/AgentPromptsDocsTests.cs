@@ -76,7 +76,7 @@ public class AgentLayerIsDescribedHonestlyTests
 {
     private static readonly string[] Docs =
     {
-        "README.md", "ARCHITECTURE.md", "code/NOTES.md", "code/INTERVIEW_PREP.md", "code/evaluation/usage_report.md", "code/evaluation/evaluation_report.md", "code/evaluation/agent_layer_report.md",
+        "README.md", "ARCHITECTURE.md", "code/evaluation/usage_report.md", "code/evaluation/evaluation_report.md", "code/evaluation/agent_layer_report.md",
     };
 
     private static string Text(string rel) => Regex.Replace(Repo.Read(rel), @"\s+", " ").ToLowerInvariant();

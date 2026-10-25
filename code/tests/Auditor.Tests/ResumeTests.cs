@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text.Json;
 
 namespace Auditor.Tests;
 
@@ -118,10 +117,10 @@ public class KillAndResumeTests : IDisposable
         var outPath = WorkDir("damaged");
         RunAndKill(outPath, 100);
         var lines = PartialLines(outPath);
-        var obj = Py.AsDict(Py.ParseJson(lines[41]));
-        var d = Py.AsDict(obj["d"]);
+        var obj = Compat.AsDict(Compat.ParseJson(lines[41]));
+        var d = Compat.AsDict(obj["d"]);
         d["status"] = (string)d["status"]! != "COMPLETE" ? "COMPLETE" : "INCOMPLETE";               // content no longer matches its checksum
-        lines[41] = Py.DumpsCompact(obj);
+        lines[41] = Compat.DumpsCompact(obj);
         File.WriteAllText(Partial(outPath), string.Join("\n", lines) + "\n");
         var (rc, err) = RunMain(outPath);
         Assert.True(rc == 0, err);
@@ -260,7 +259,7 @@ public class RunKeyTests : IDisposable
     {
         var r = new CaseResult("case_7", "INCOMPLETE", new() { new Step(1, "FINDING", "s", "r_1", "REPORT_REMAINING_RECORD", "PRESENT", "e") }, new() { "a note" },
                                new() { ("account_1", "evidence_02", "2026-09-17T12:00:00Z") }, true);
-        var back = Checkpoint.FromPayload((Dictionary<string, object?>)Py.ParseJson(Py.DumpsCompact(Checkpoint.ToPayload(r)))!);
+        var back = Checkpoint.FromPayload((Dictionary<string, object?>)Compat.ParseJson(Compat.DumpsCompact(Checkpoint.ToPayload(r)))!);
         Assert.Equal(r.CaseId, back.CaseId);
         Assert.Equal(r.Status, back.Status);
         Assert.Equal(r.Steps, back.Steps);

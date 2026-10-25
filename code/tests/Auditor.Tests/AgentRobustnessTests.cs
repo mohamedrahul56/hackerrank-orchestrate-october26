@@ -9,7 +9,7 @@ public class AgentDamagedImageTests : AgentLoopBase
     {
         File.WriteAllBytes(Png, File.ReadAllBytes(Png).Take(300).ToArray());
         var rd = Reader(new object[] { Msg(Use("zoom_region", Zoom)), Submit() });
-        Assert.Equal("account_5762", Py.Get(Py.AsList(Read(rd)["records"])[0], "resource_id"));
+        Assert.Equal("account_5762", Compat.Get(Compat.AsList(Read(rd)["records"])[0], "resource_id"));
         var result = (ToolResultBlock)Fake.Calls[1].Messages[2].Content[0];
         Assert.True(result.IsError);
         Assert.Contains("cannot be cropped", ResultText(result), StringComparison.Ordinal);
@@ -62,7 +62,7 @@ public class AFailedRunStopsCheaplyTests : AgentLoopBase
     {
         var rd = Reader(new object[] { Msg(Use("zoom_region", Zoom)) }.Concat(Enumerable.Repeat((object)new ModelApiException("t", null, "Timeout"), 4)));
         Assert.Throws<LlmUnavailableException>(() => Read(rd));
-        var row = Usage().First(r => Py.Get(r, "kind") as string == "agent_image");
+        var row = Usage().First(r => Compat.Get(r, "kind") as string == "agent_image");
         Assert.Equal(new object[] { 1L, 100L, 20L, 1L }, new[] { row["calls"], row["input_tokens"], row["output_tokens"], row["zooms"] });
         Assert.Contains("model unavailable during the loop", (string)row["error"]!, StringComparison.Ordinal);
     }

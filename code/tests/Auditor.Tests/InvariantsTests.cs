@@ -176,7 +176,7 @@ public class InvariantsTests
         Assert.True(Fresh.Value.Rows.Select(r => r.Item2).ToHashSet().SetEquals(new[] { "COMPLETE", "INCOMPLETE", "NOT_APPLICABLE" }));
 
     private static List<(string, string, List<St>)> RowsOf(string path) =>
-        Csv.ReadRows(path).Select(r => (r.G("case_id"), r.G("deletion_status"), Py.AsList(Py.ParseJson(r.G("steps_json"))).Select(x => FromFields(Py.AsDict(x))).ToList())).ToList();
+        Csv.ReadRows(path).Select(r => (r.G("case_id"), r.G("deletion_status"), Compat.AsList(Compat.ParseJson(r.G("steps_json"))).Select(x => FromFields(Compat.AsDict(x))).ToList())).ToList();
 
     [DatasetFact]
     public void CommittedOutputCsvHoldsEveryInvariant()

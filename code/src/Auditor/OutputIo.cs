@@ -7,7 +7,7 @@ public static class OutputIo
 {
     public sealed record Row(string CaseId, string Status, IReadOnlyList<Step> Steps);
 
-    public static string DumpsSteps(IEnumerable<Step> steps) => Py.DumpsCompact(steps.Select(s => s.ToJson()).ToList());
+    public static string DumpsSteps(IEnumerable<Step> steps) => Compat.DumpsCompact(steps.Select(s => s.ToJson()).ToList());
 
     public static void Write(string path, IEnumerable<Row> rows)
     {

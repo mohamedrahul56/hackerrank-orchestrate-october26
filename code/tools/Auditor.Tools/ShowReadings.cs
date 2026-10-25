@@ -46,7 +46,7 @@ public static class ShowReadings
             {
                 item.Reading = reader.Read(item.Path, ImageObs.System, ImageObs.Instruction, ImageObs.Schema, ImageObs.PromptVersion);
                 var b = new EvidenceBase();
-                ImageObs.ObservationsFromReading(b, r.FileId, Py.ParseTs(r.CapturedAt), item.Reading, catalog);
+                ImageObs.ObservationsFromReading(b, r.FileId, Compat.ParseTs(r.CapturedAt), item.Reading, catalog);
                 item.Observations = b.Obs;
             }
             catch (Exception e) { item.Error = $"{e.GetType().Name}: {e.Message}"; }

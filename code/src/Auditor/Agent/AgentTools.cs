@@ -29,7 +29,7 @@ public static class AgentTools
     /// <summary>a screenshot with more pixels than this is not decoded at all (a decompression bomb)</summary>
     public const long MaxImagePixels = 89_478_485;
 
-    private static Dictionary<string, object?> Clone(Dictionary<string, object?> d) => (Dictionary<string, object?>)Py.ParseJson(Py.DumpsCompact(d))!;
+    private static Dictionary<string, object?> Clone(Dictionary<string, object?> d) => (Dictionary<string, object?>)Compat.ParseJson(Compat.DumpsCompact(d))!;
 
     /// <summary>A copy of <paramref name="schema"/> in which every property carries its description (a missing description is a programming error, caught at first use).</summary>
     private static Dictionary<string, object?> Document(Dictionary<string, object?> schema, IReadOnlyDictionary<string, string> docs)
@@ -126,7 +126,7 @@ public static class AgentTools
     public static string ToolsDigest()
     {
         object?[] tools = { ToolDocument(ZoomTool), ToolDocument(SubmitTool) };
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(PyJsonSorted.Dumps(tools)))).ToLowerInvariant();
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(SortedJson.Dumps(tools)))).ToLowerInvariant();
     }
 
     private static Dictionary<string, object?> ToolDocument(ToolSpec t) => Obj(("name", t.Name), ("description", t.Description), ("input_schema", t.InputSchema));

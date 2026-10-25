@@ -47,11 +47,11 @@ public static class Prices
         foreach (var (model, entry) in doc.OrderBy(kv => kv.Key, StringComparer.Ordinal))
         {
             if (model.StartsWith('_') || entry is not Dictionary<string, object?> e) continue;
-            var bad = new[] { "input_per_mtok", "output_per_mtok" }.Where(k => !Num(Py.Get(e, k))).ToList();
-            var cache = Py.Get(e, "cache_read_per_mtok");
+            var bad = new[] { "input_per_mtok", "output_per_mtok" }.Where(k => !Num(Compat.Get(e, k))).ToList();
+            var cache = Compat.Get(e, "cache_read_per_mtok");
             if (cache is not null && !Num(cache)) bad.Add("cache_read_per_mtok");
-            if (!UrlRe.IsMatch(Py.Str(Py.Or(Py.Get(e, "source_url"), ""))) ) bad.Add("source_url");
-            if (!DateRe.IsMatch(Py.Str(Py.Or(Py.Get(e, "date"), "")))) bad.Add("date");
+            if (!UrlRe.IsMatch(Compat.Str(Compat.Or(Compat.Get(e, "source_url"), ""))) ) bad.Add("source_url");
+            if (!DateRe.IsMatch(Compat.Str(Compat.Or(Compat.Get(e, "date"), "")))) bad.Add("date");
             if (bad.Count > 0) { problems.Add($"{model}: missing or invalid {string.Join(", ", bad)}"); continue; }
             prices[model] = new Price(Convert.ToDouble(e["input_per_mtok"], System.Globalization.CultureInfo.InvariantCulture), Convert.ToDouble(e["output_per_mtok"], System.Globalization.CultureInfo.InvariantCulture),
                                       cache is null ? null : Convert.ToDouble(cache, System.Globalization.CultureInfo.InvariantCulture), (string)e["source_url"]!, (string)e["date"]!);
@@ -64,7 +64,7 @@ public static class Prices
         var p = path ?? Environment.GetEnvironmentVariable("AUDITOR_PRICES_FILE");
         if (string.IsNullOrEmpty(p)) p = DefaultPath;
         if (!File.Exists(p)) return (new(), new() { $"no price file at {p}" });
-        try { return Parse(Py.AsDict(Py.ParseJson(Py.ReadText(p)))); }
+        try { return Parse(Compat.AsDict(Compat.ParseJson(Compat.ReadText(p)))); }
         catch (Exception e) when (e is IOException or DataException) { return (new(), new() { $"unreadable price file {p}: {e.Message}" }); }
     }
 }

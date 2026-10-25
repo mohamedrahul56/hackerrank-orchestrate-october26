@@ -19,7 +19,7 @@ public static class RouterEquivalence
         foreach (var r in manifest)
         {
             if (Load.InsideRoot(root, r.FilePath)) safe.Add(r);
-            else b.Warnings.Add($"{r.FileId}: manifest path {Py.StrRepr(r.FilePath.Length > 60 ? r.FilePath[..60] : r.FilePath)} points outside the dataset folder; not read");
+            else b.Warnings.Add($"{r.FileId}: manifest path {Compat.StrRepr(r.FilePath.Length > 60 ? r.FilePath[..60] : r.FilePath)} points outside the dataset folder; not read");
         }
         if (includeImages && reader is not null && workers > 1)
         {
@@ -49,13 +49,13 @@ public static class RouterEquivalence
         if (odd.Count > 0)
         {
             b.Obs = b.Obs.Where(o => Schema.ValidResourceId(o.Resource)).ToList();
-            b.Warnings.Add($"{odd.Count} observation(s) dropped: resource id is not of the form <name>_<number> (first: {odd[0].FileId} {Py.StrRepr(odd[0].Resource.Length > 40 ? odd[0].Resource[..40] : odd[0].Resource)})");
+            b.Warnings.Add($"{odd.Count} observation(s) dropped: resource id is not of the form <name>_<number> (first: {odd[0].FileId} {Compat.StrRepr(odd[0].Resource.Length > 40 ? odd[0].Resource[..40] : odd[0].Resource)})");
         }
         return b;
     }
 
     private static string Project(Obs o) =>
-        string.Join("|", o.FileId, Py.FormatTs(o.FileT), Py.FormatTs(o.T), o.System, o.Resource, o.Category, o.State, string.Join(",", o.Idents.OrderBy(i => i, StringComparer.Ordinal)), o.Source, o.Detail, o.Until is { } u ? Py.FormatTs(u) : "-");
+        string.Join("|", o.FileId, Compat.FormatTs(o.FileT), Compat.FormatTs(o.T), o.System, o.Resource, o.Category, o.State, string.Join(",", o.Idents.OrderBy(i => i, StringComparer.Ordinal)), o.Source, o.Detail, o.Until is { } u ? Compat.FormatTs(u) : "-");
 
     /// <summary>Loads <paramref name="root"/> with the legacy dispatch and with the router; returns counts and the list of differences (empty = identical).</summary>
     public static (List<string> Differences, int Files, int Routes, int Observations) Compare(string root, bool includeImages, IImageReader? reader, int workers)

@@ -142,7 +142,7 @@ public class PackagingRulesTests : IDisposable
     private static readonly Dictionary<string, string> Base = new()
     {
         ["README.md"] = "# run it", ["ARCHITECTURE.md"] = "# design", ["Makefile"] = "test:\n\ttrue\n", ["code/Auditor.sln"] = "sln", ["code/src/Auditor/Auditor.csproj"] = "<Project/>",
-        ["code/src/Auditor.Cli/Program.cs"] = "// main", ["code/NOTES.md"] = "notes", ["code/evaluation/extra_cases.md"] = "cases", ["code/config/prices.example.json"] = "{}",
+        ["code/src/Auditor.Cli/Program.cs"] = "// main", ["code/notes.md"] = "notes", ["code/evaluation/extra_cases.md"] = "cases", ["code/config/prices.example.json"] = "{}",
     };
 
     private void Tree(Dictionary<string, string> files)
@@ -196,10 +196,10 @@ public class PackagingRulesTests : IDisposable
     public void SecretShapesAreDetectedEverywhereIncludingMarkdownAndTheLog()
     {
         Tree(Base.ToDictionary(kv => kv.Key, kv => kv.Value));
-        Tree(new() { ["code/NOTES.md"] = $"key: {FakeKey}", ["log.txt"] = "token ghp_" + new string('a', 36), ["code/config/prices.json"] = "{\"api_key\": \"" + new string('x', 24) + "\"}" });
+        Tree(new() { ["code/notes.md"] = $"key: {FakeKey}", ["log.txt"] = "token ghp_" + new string('a', 36), ["code/config/prices.json"] = "{\"api_key\": \"" + new string('x', 24) + "\"}" });
         var (bad, _) = Packager.Check(Packager.Collect(tmp.Path), tmp.Path);
         var text = string.Join("\n", bad);
-        Assert.Contains("code/NOTES.md: looks like a Anthropic key", text, StringComparison.Ordinal);
+        Assert.Contains("code/notes.md: looks like a Anthropic key", text, StringComparison.Ordinal);
         Assert.Contains("log.txt (not zipped, scanned anyway): looks like a GitHub token", text, StringComparison.Ordinal);
         Assert.Contains("prices.json (not zipped, scanned anyway): looks like a key-like assignment", text, StringComparison.Ordinal);
     }
@@ -208,7 +208,7 @@ public class PackagingRulesTests : IDisposable
     public void OrdinaryTextIsNotFlagged()
     {
         Tree(Base);
-        Tree(new() { ["code/NOTES.md"] = "Set ANTHROPIC_API_KEY in your shell. Use sk-... never. password = prompt for it. token_count=5" });
+        Tree(new() { ["code/notes.md"] = "Set ANTHROPIC_API_KEY in your shell. Use sk-... never. password = prompt for it. token_count=5" });
         Assert.Empty(Packager.Check(Packager.Collect(tmp.Path), tmp.Path).Bad);
     }
 
@@ -216,7 +216,7 @@ public class PackagingRulesTests : IDisposable
     public void DatasetPeopleMustNotLeakIntoTheZip()
     {
         Tree(Base);
-        Tree(new() { ["dataset/user_identities.csv"] = "user_id,name,email,phone,email_hash,updated_at\nu1,A,real.person@corp.test,1,h,t\n", ["code/NOTES.md"] = "mentions Real.Person@corp.test once" });
+        Tree(new() { ["dataset/user_identities.csv"] = "user_id,name,email,phone,email_hash,updated_at\nu1,A,real.person@corp.test,1,h,t\n", ["code/notes.md"] = "mentions Real.Person@corp.test once" });
         var (bad, _) = Packager.Check(Packager.Collect(tmp.Path), tmp.Path);
         Assert.Contains(bad, b => b.Contains("e-mail address(es) of dataset people", StringComparison.Ordinal));
     }
@@ -415,7 +415,7 @@ public class ShowReadingsTests : IDisposable
     [Fact]
     public void ModelTextIsEscapedInThePage()
     {
-        var evil = (Dictionary<string, object?>)Py.ParseJson(
+        var evil = (Dictionary<string, object?>)Compat.ParseJson(
             "{\"screen\": \"<script>alert(1)</script>\", \"records\": [{\"resource_id\": \"<img src=x onerror=alert(1)>\", \"selected\": false, \"emails\": [], \"user_ids\": [], \"phones\": [], \"status_words\": [], \"shows_direct_identifiers\": false, \"aliases\": []}]}")!;
         var page = ShowReadings.RenderHtml(ShowReadings.ReadAll(tmp.Path, Reader(() => evil)));
         Assert.DoesNotContain("<script>alert(1)", page, StringComparison.Ordinal);

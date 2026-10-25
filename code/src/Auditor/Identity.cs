@@ -32,7 +32,7 @@ public sealed class Person
 
 /// <summary>
 /// Identity resolver: request email -> user(s) and every identifier that user has ever had.
-/// Facts measured on the data (NOTES.md): email_hash = sha256(lower(strip(email))) for all current rows and all audit-log pairs; every request email resolves to exactly one user;
+/// Facts measured on the data: email_hash = sha256(lower(strip(email))) for all current rows and all audit-log pairs; every request email resolves to exactly one user;
 /// the audit log only changes email/email_hash/phone. Still handled generally: case/whitespace differences, an email reassigned to another user later (resolved by who owned it
 /// at <c>requested_at</c>), and emails that match nobody or several users.
 /// </summary>
@@ -60,10 +60,10 @@ public sealed class IdentityResolver
         {
             if (r["user_id"].Trim().Length == 0 || r["email"].Trim().Length == 0)
             {
-                Warnings.Add($"identity row skipped (empty user_id or email): {Py.StrRepr(r.G("user_id"))}");
+                Warnings.Add($"identity row skipped (empty user_id or email): {Compat.StrRepr(r.G("user_id"))}");
                 continue;
             }
-            var p = new Person(r["user_id"].Trim(), r.G("name"), NormEmail(r["email"])) { UpdatedAt = Py.TryTs(r.G("updated_at")) };
+            var p = new Person(r["user_id"].Trim(), r.G("name"), NormEmail(r["email"])) { UpdatedAt = Compat.TryTs(r.G("updated_at")) };
             p.Hashes.Add(EmailHash(r["email"]));
             if (r.G("email_hash").Trim().Length > 0) p.Hashes.Add(r["email_hash"].Trim().ToLowerInvariant());
             var phone = Records.NormPhone(r.G("phone"));
@@ -80,7 +80,7 @@ public sealed class IdentityResolver
         }
         foreach (var r in logRows)
         {
-            if (Py.TryTs(r["event_time"]) is null)
+            if (Compat.TryTs(r["event_time"]) is null)
             {
                 Warnings.Add($"audit-log row {(r.TryGetValue("audit_id", out var auditId) ? auditId : "?")} skipped (bad event_time)");
                 continue;
@@ -103,7 +103,7 @@ public sealed class IdentityResolver
             var spans = new List<EmailSpan>();
             foreach (var r in emailRows)                                              // old email valid until the change time
             {
-                var when = Py.ParseTs(r["event_time"]);
+                var when = Compat.ParseTs(r["event_time"]);
                 spans.Add(new EmailSpan(NormEmail(r.G("old_value")), prevUntil, when));
                 person.Hashes.Add(EmailHash(r.G("old_value"))); person.Hashes.Add(EmailHash(r.G("new_value")));
                 prevUntil = when;

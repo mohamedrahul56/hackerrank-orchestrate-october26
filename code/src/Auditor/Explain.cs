@@ -1,4 +1,3 @@
-using System.Text;
 using Auditor.Evidence;
 
 namespace Auditor;
@@ -11,7 +10,7 @@ namespace Auditor;
 /// </summary>
 public static class Explainer
 {
-    private static string T(DateTime? dt) => dt is null ? "-" : Py.FormatTs(dt.Value);
+    private static string T(DateTime? dt) => dt is null ? "-" : Compat.FormatTs(dt.Value);
 
     private static List<string> Table(string[] header, List<string[]> rows, int indent = 2)
     {
@@ -76,7 +75,7 @@ public static class Explainer
             var kind = mail == p.CurrentEmail ? "the CURRENT e-mail" : "a HISTORICAL e-mail";
             var valid = span is null ? "" : $" (valid {(span.From is null ? "since the beginning" : T(span.From))} .. {(span.Until is null ? "now" : T(span.Until))})";
             L.Add($"  {r.Email} -> {p.UserId} ({p.Name}): {kind}{valid}");
-            L.Add($"    identifiers used to match evidence: {p.Emails.Count} e-mail(s) {Py.ListRepr(p.Emails.OrderBy(e => e, StringComparer.Ordinal))}, {p.Hashes.Count} hash(es), {p.Phones.Count} phone(s), and the user id {p.UserId}");
+            L.Add($"    identifiers used to match evidence: {p.Emails.Count} e-mail(s) {Compat.ListRepr(p.Emails.OrderBy(e => e, StringComparer.Ordinal))}, {p.Hashes.Count} hash(es), {p.Phones.Count} phone(s), and the user id {p.UserId}");
             L.Add("    matching is by exact identifier only (e-mail, user id, sha256 of the e-mail, phone); names and look-alike addresses never match");
         }
         if (people.Count > 1) L.Add($"  {people.Count} people own this e-mail; the one who owned it at requested_at wins");
@@ -109,7 +108,7 @@ public static class Explainer
         a.AnalyticsAsg.TryGetValue(caseId, out var ana);
         if (asg is not null)
         {
-            L.Add($"  account discovery   : {asg.How}" + (asg.Resource is not null ? $" -> {asg.Resource}" : "") + (asg.CandidateList.Count > 0 ? $"; candidates {Py.ListRepr(asg.CandidateList)}" : "")
+            L.Add($"  account discovery   : {asg.How}" + (asg.Resource is not null ? $" -> {asg.Resource}" : "") + (asg.CandidateList.Count > 0 ? $"; candidates {Compat.ListRepr(asg.CandidateList)}" : "")
                   + (asg.Event is not null ? $"; worker delete event {asg.Event.ActivityId} at {T(asg.Event.T)} ({asg.Event.Result})" : ""));
             string? howText = asg.How switch
             {
@@ -126,7 +125,7 @@ public static class Explainer
                 L.Add("      -> no worker delete event for a free account falls in this case's window: no account is known, so no account step");
         }
         if (ana is not null && (ana.Resource is not null || ana.How == "ambiguous"))
-            L.Add($"  analytics discovery : {ana.How}" + (ana.Resource is not null ? $" -> {ana.Resource}" : $"; candidates {Py.ListRepr(ana.CandidateList)} (not separable: no step)"));
+            L.Add($"  analytics discovery : {ana.How}" + (ana.Resource is not null ? $" -> {ana.Resource}" : $"; candidates {Compat.ListRepr(ana.CandidateList)} (not separable: no step)"));
         if (trace.Resources.Count == 0) L.Add("  (no resource is tied to this person)");
 
         // ------------------------------------------------------------------ 4. state per resource

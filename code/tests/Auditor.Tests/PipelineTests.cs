@@ -1,4 +1,3 @@
-using System.Text;
 
 namespace Auditor.Tests;
 
@@ -47,7 +46,7 @@ public class LogParseTests
 
 public class StateTests
 {
-    private static DateTime T(string s) => Py.ParseTs(s);
+    private static DateTime T(string s) => Compat.ParseTs(s);
     private static readonly DateTime T0 = T("2026-09-01T00:00:00Z"), A = T("2026-09-10T00:00:00Z");
 
     private static Obs Make(string fileT, string state, string source = "sql:t", string? t = null, string fid = "f", string res = "account_1", string cat = "USER_PROFILE")
@@ -91,7 +90,7 @@ public class StateTests
 
 public class DiscoveryTests
 {
-    private static DateTime T(string s) => Py.ParseTs(s);
+    private static DateTime T(string s) => Compat.ParseTs(s);
     private static readonly DateTime R = T("2026-09-02T12:00:00Z");
     private static readonly Tunables Tune = new();
 
@@ -387,8 +386,8 @@ public class IdentityTests
             $"user_1,A,a2@x.com,+1 555 0100 123,{IdentityResolver.EmailHash("a2@x.com")},2026-01-01T00:00:00Z",
             $"user_2,B,shared@x.com,+1 555 0100 456,{IdentityResolver.EmailHash("shared@x.com")},2026-03-01T00:00:00Z",
         }, new[] { "a1,user_1,2026-02-01T00:00:00Z,email,shared@x.com,a2@x.com" });
-        Assert.Equal(new[] { "user_1" }, r.Resolve("shared@x.com", Py.ParseTs("2026-01-15T00:00:00Z")).Select(p => p.UserId));
-        Assert.Equal(new[] { "user_2" }, r.Resolve("shared@x.com", Py.ParseTs("2026-04-01T00:00:00Z")).Select(p => p.UserId));
+        Assert.Equal(new[] { "user_1" }, r.Resolve("shared@x.com", Compat.ParseTs("2026-01-15T00:00:00Z")).Select(p => p.UserId));
+        Assert.Equal(new[] { "user_2" }, r.Resolve("shared@x.com", Compat.ParseTs("2026-04-01T00:00:00Z")).Select(p => p.UserId));
         Assert.Equal(2, r.Resolve("shared@x.com").Count);                 // no timestamp: both candidates are returned
     }
 }

@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 
 namespace Auditor.Tests;
 
@@ -27,10 +26,10 @@ public class AgentOptInAndNoChangeTests : IDisposable
         var notes = File.ReadAllText(Path.ChangeExtension(outPath, ".notes.md"));
         Assert.Contains("Agent layer", notes, StringComparison.Ordinal);
         Assert.Contains("not read", notes, StringComparison.Ordinal);
-        var rows = File.ReadAllLines(Path.ChangeExtension(outPath, ".usage.jsonl")).Select(l => Py.AsDict(Py.ParseJson(l))).ToList();
-        var info = rows.First(r => Py.Get(r, "kind") as string == "run_info");
+        var rows = File.ReadAllLines(Path.ChangeExtension(outPath, ".usage.jsonl")).Select(l => Compat.AsDict(Compat.ParseJson(l))).ToList();
+        var info = rows.First(r => Compat.Get(r, "kind") as string == "run_info");
         Assert.Equal((true, 0L, 0L), ((bool)info["images_read_by_agent"]!, (long)info["agent_screenshots_read"]!, (long)info["agent_screenshots_failed"]!));
-        Assert.DoesNotContain(rows, r => Py.Get(r, "kind") as string == "agent_image");        // no key: no call, no tokens, no usage row
+        Assert.DoesNotContain(rows, r => Compat.Get(r, "kind") as string == "agent_image");        // no key: no call, no tokens, no usage row
     }
 
     [DatasetFact]
@@ -84,7 +83,7 @@ public class AgentScriptedReplayTests : IDisposable
     public void ReplayThroughTheLoopEqualsTheReadingsFileRun()
     {
         if (!File.Exists(Local) || !Repo.HasDataset) return;          // the local readings file is git-ignored (it holds dataset e-mail addresses): the replay needs it
-        var readings = Py.AsDict(Py.AsDict(Py.ParseJson(File.ReadAllText(Local)))["readings"]);
+        var readings = Compat.AsDict(Compat.AsDict(Compat.ParseJson(File.ReadAllText(Local)))["readings"]);
         var client = new ScriptedClient(readings);
         string fromFile = dir.File("file.csv"), viaAgent = dir.File("agent.csv");
         Assert.Equal(0, Run.Cli("--images", "file", "--out", fromFile).Code);
@@ -95,8 +94,8 @@ public class AgentScriptedReplayTests : IDisposable
         Assert.True(rc == 0, err);
         Assert.Equal(File.ReadAllBytes(fromFile), File.ReadAllBytes(viaAgent));                       // the agent loop and gate changed an answer
         Assert.Equal(22, client.Calls);                                                              // 11 screenshots x (one zoom + one submit)
-        var rows = File.ReadAllLines(Path.ChangeExtension(viaAgent, ".usage.jsonl")).Select(l => Py.AsDict(Py.ParseJson(l))).ToList();
-        var agentRows = rows.Where(r => Py.Get(r, "kind") as string == "agent_image").ToList();
+        var rows = File.ReadAllLines(Path.ChangeExtension(viaAgent, ".usage.jsonl")).Select(l => Compat.AsDict(Compat.ParseJson(l))).ToList();
+        var agentRows = rows.Where(r => Compat.Get(r, "kind") as string == "agent_image").ToList();
         Assert.Equal((11, 11L, 22L), (agentRows.Count, agentRows.Sum(r => (long)r["zooms"]!), agentRows.Sum(r => (long)r["tool_calls"]!)));
         var notes = File.ReadAllText(Path.ChangeExtension(viaAgent, ".notes.md"));
         Assert.Contains("screenshots read: 11", notes, StringComparison.Ordinal);

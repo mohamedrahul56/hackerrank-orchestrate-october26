@@ -1,4 +1,3 @@
-using Auditor.Tools;
 
 namespace Auditor.Tests;
 

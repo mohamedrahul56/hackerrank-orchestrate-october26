@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Diagnostics;
 using Auditor.Evidence;
 
@@ -20,7 +19,7 @@ public sealed class AuditConfig
     public bool ProvisionalRows { get; init; } = true;
     /// <summary>measured harmful by hold-out (precision 86% vs 100%): kept only as an ablation switch</summary>
     public bool UseCohortFilter { get; init; }
-    /// <summary>the two second-of-minute heuristics (accounts: PhaseModel offsets; analytics: the 40/41 s offset). Dataset-specific, see README/NOTES 12</summary>
+    /// <summary>the two second-of-minute heuristics (accounts: PhaseModel offsets; analytics: the 40/41 s offset). Dataset-specific, see ARCHITECTURE.md decision D3</summary>
     public bool UseTimingHeuristics { get; init; } = true;
     public Tunables Tune { get; init; } = new();
     /// <summary>concurrent model calls when reading screenshots (output order is unaffected)</summary>
@@ -280,7 +279,7 @@ public sealed class CaseAuditor
             if (first is not null && first.Value.T > auditAt)
             {
                 if (!Cfg.AllowLaterLinking) continue;
-                later.Add((rid, first.Value.Id, Py.FormatTs(first.Value.T)));
+                later.Add((rid, first.Value.Id, Compat.FormatTs(first.Value.T)));
             }
             resources[rid] = "explicit";
         }
@@ -294,7 +293,7 @@ public sealed class CaseAuditor
             if (acct.How == "explicit")                       // linked by a snapshot captured after audit_at: a logged later-evidence use
             {
                 var first = Link.FirstLinkTime(accountResource, users);
-                if (first is not null && first.Value.T > auditAt) later.Add((accountResource, first.Value.Id, Py.FormatTs(first.Value.T)));
+                if (first is not null && first.Value.T > auditAt) later.Add((accountResource, first.Value.Id, Compat.FormatTs(first.Value.T)));
             }
         }
         AnalyticsAsg.TryGetValue(caseId, out var ana);
@@ -325,8 +324,8 @@ public sealed class CaseAuditor
         {
             if (st.Until is { } until && until <= auditAt)
             {
-                notes.Add($"{rid}: retention/hold ended {Py.FormatTs(until)} (before audit_at): no retain requirement, no step");
-                tr.Omitted.Add((rid, $"its retention / legal hold ended {Py.FormatTs(until)}, before audit_at: the RETAIN rule no longer applies, so nothing is required of it"));
+                notes.Add($"{rid}: retention/hold ended {Compat.FormatTs(until)} (before audit_at): no retain requirement, no step");
+                tr.Omitted.Add((rid, $"its retention / legal hold ended {Compat.FormatTs(until)}, before audit_at: the RETAIN rule no longer applies, so nothing is required of it"));
                 continue;
             }
             var v = Policy.Judge(st.Category, st.State);
@@ -413,7 +412,7 @@ public sealed class CaseAuditor
             if (citeOk)
             {
                 (cite, how) = CiteUnobserved("account_service", r, states, ev);
-                notes.Add($"{rid}: no observation in window; cited {Py.StrRepr(cite)} ({how})");
+                notes.Add($"{rid}: no observation in window; cited {Compat.StrRepr(cite)} ({how})");
             }
             steps.Add(tr.Why(Schema.MakeStep("VERIFICATION", "VERIFY_RECORD_ABSENT", "account_service", rid, cite),
                              $"{rid} is the user's account ({(resources.TryGetValue(rid, out var res) ? res : "None")}); no file shows it inside the window, so it is treated as deleted (claim from the worker's delete event)"
@@ -471,7 +470,7 @@ public sealed class CaseAuditor
             var lead = system.Split('_')[0];
             var shots = Manifest.Where(m => m.FilePath.ToLowerInvariant().EndsWith(".png", StringComparison.Ordinal) && r.RequestedAt <= m.T && m.T <= r.AuditAt && m.Origin.Split('_')[0] == lead).ToList();
             if (shots.Count == 0) continue;
-            var shot = shots.Aggregate((best, m) => Py.CompareTuple(m.T, m.FileId, best.T, best.FileId) > 0 ? m : best);
+            var shot = shots.Aggregate((best, m) => Compat.CompareTuple(m.T, m.FileId, best.T, best.FileId) > 0 ? m : best);
             steps.Add(Schema.MakeStep("FINDING", v.Treatment.Finding, system, rid, shot.FileId));
             steps.Add(Schema.MakeStep("REMEDIATION", v.Treatment.Fix, system, rid));
             steps.Add(Schema.MakeStep("VERIFICATION", v.Treatment.Verify, system, rid));

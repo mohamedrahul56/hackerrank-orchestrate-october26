@@ -14,3 +14,15 @@ public class SchemaException : Exception
 {
     public SchemaException(string message, Exception? inner = null) : base(message, inner) { }
 }
+
+/// <summary>A malformed value in the data (the .NET counterpart of the ValueError / KeyError / TypeError / AttributeError the loaders recover from).</summary>
+public sealed class DataException : Exception
+{
+    public DataException(string message) : base(message) { }
+}
+
+/// <summary>A file the run cannot do without is missing or has no usable header. Everything else degrades row by row.</summary>
+public sealed class DatasetException : Exception
+{
+    public DatasetException(string message, Exception? inner = null) : base(message, inner) { }
+}

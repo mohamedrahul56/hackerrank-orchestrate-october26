@@ -44,7 +44,7 @@ public class SchemaTests
     [Fact]
     public void ResourceIdTiesUsePlainStringOrder()
     {
-        // Decision (NOTES.md): ties on system_id are broken by PLAIN STRING order of resource_id; ids are not zero-padded, so string order differs from numeric order.
+        // Decision: ties on system_id are broken by PLAIN STRING order of resource_id; ids are not zero-padded, so string order differs from numeric order.
         var a = Schema.MakeStep("VERIFICATION", "VERIFY_RECORD_PRESENT", "security_service", "audit_record_987");
         var b = Schema.MakeStep("VERIFICATION", "VERIFY_RECORD_PRESENT", "security_service", "audit_record_9528");
         var c = Schema.MakeStep("VERIFICATION", "VERIFY_RECORD_PRESENT", "security_service", "audit_record_10");

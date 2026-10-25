@@ -28,15 +28,15 @@ public class AgentCraftTests
         {
             var props = Properties(schema).ToList();
             Assert.True(props.Count >= 4);
-            foreach (var (name, sub) in props) Assert.True(Py.Str(sub.GetValueOrDefault("description") ?? "").Length > 20, name);
+            foreach (var (name, sub) in props) Assert.True(Compat.Str(sub.GetValueOrDefault("description") ?? "").Length > 20, name);
         }
     }
 
     [Fact]
     public void DescriptionsDoNotChangeWhatTheSchemaAccepts()
     {
-        JsonSchemaCheck.Validate(Py.ParseJson("{\"screen\": \"s\", \"records\": [], \"unknown\": []}"), AgentTools.SubmitSchema);
-        Assert.Throws<SchemaException>(() => JsonSchemaCheck.Validate(Py.ParseJson("{\"screen\": \"s\"}"), AgentTools.SubmitSchema));
+        JsonSchemaCheck.Validate(Compat.ParseJson("{\"screen\": \"s\", \"records\": [], \"unknown\": []}"), AgentTools.SubmitSchema);
+        Assert.Throws<SchemaException>(() => JsonSchemaCheck.Validate(Compat.ParseJson("{\"screen\": \"s\"}"), AgentTools.SubmitSchema));
     }
 
     [Fact]
@@ -103,10 +103,10 @@ public class AgentCraftTests
     public void TheSubmitExampleFitsTheSchemaAndPassesTheGate()
     {
         var blocks = Regex.Matches(SystemPrompt.Text, "```json\n(.*?)\n```", RegexOptions.Singleline).Select(m => m.Groups[1].Value).ToList();
-        var example = (Dictionary<string, object?>)Py.ParseJson(Assert.Single(blocks))!;
+        var example = (Dictionary<string, object?>)Compat.ParseJson(Assert.Single(blocks))!;
         JsonSchemaCheck.Validate(example, AgentTools.SubmitSchema);
         var result = Gate.GateReading(example, "evidence_00", new HashSet<string> { "evidence_00" });
-        Assert.Equal(new[] { "export_9001", "export_9002" }, Py.AsList(result.Reading["records"]).Select(r => (string)Py.Get(r, "resource_id")!));
+        Assert.Equal(new[] { "export_9001", "export_9002" }, Compat.AsList(result.Reading["records"]).Select(r => (string)Compat.Get(r, "resource_id")!));
         Assert.Empty(result.Rejections);
     }
 
@@ -115,7 +115,7 @@ public class AgentCraftTests
     {
         var m = Regex.Match(SystemPrompt.Text, @"A (\d+) x (\d+) screenshot");
         int w = int.Parse(m.Groups[1].Value), h = int.Parse(m.Groups[2].Value);
-        var call = (Dictionary<string, object?>)Py.ParseJson(Regex.Match(SystemPrompt.Text, @"`zoom_region` with `(\{.*?\})`").Groups[1].Value)!;
+        var call = (Dictionary<string, object?>)Compat.ParseJson(Regex.Match(SystemPrompt.Text, @"`zoom_region` with `(\{.*?\})`").Groups[1].Value)!;
         JsonSchemaCheck.Validate(call, AgentTools.ZoomSchema);
         long x = (long)call["x"]!, y = (long)call["y"]!, cw = (long)call["width"]!, ch = (long)call["height"]!;
         Assert.True(Math.Min(cw, ch) >= AgentTools.MinSide);

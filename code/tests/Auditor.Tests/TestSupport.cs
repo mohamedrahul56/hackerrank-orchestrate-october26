@@ -102,7 +102,7 @@ public sealed class FakeModelClient : IModelClient
     }
 
     public static ModelResponse Reply(object jsonOrText, long input = 100, long output = 50, string stop = "end_turn") =>
-        new(stop, new ContentBlock[] { new TextBlock(jsonOrText as string ?? Py.DumpsCompact(jsonOrText)) }, new ModelUsage(input, output, 0));
+        new(stop, new ContentBlock[] { new TextBlock(jsonOrText as string ?? Compat.DumpsCompact(jsonOrText)) }, new ModelUsage(input, output, 0));
 
     public static ModelResponse Empty(long input = 100, long output = 20) => new("end_turn", Array.Empty<ContentBlock>(), new ModelUsage(input, output, 0));
 
@@ -112,7 +112,7 @@ public sealed class FakeModelClient : IModelClient
 public static class Samples
 {
     /// <summary>A reading the single-shot image reader would produce for a connector console.</summary>
-    public static Dictionary<string, object?> Good() => (Dictionary<string, object?>)Py.ParseJson(
+    public static Dictionary<string, object?> Good() => (Dictionary<string, object?>)Compat.ParseJson(
         "{\"screen\": \"connector console\", \"records\": [" +
         "{\"resource_id\": \"data_flow_1121\", \"selected\": true, \"emails\": [\"aditi.example@example.test\"], \"user_ids\": [], \"phones\": [], \"status_words\": [\"Healthy\", \"Continuous\"], \"shows_direct_identifiers\": true, \"aliases\": []}," +
         "{\"resource_id\": \"Order notifications\", \"selected\": false, \"emails\": [], \"user_ids\": [], \"phones\": [], \"status_words\": [], \"shows_direct_identifiers\": false, \"aliases\": []}]}")!;

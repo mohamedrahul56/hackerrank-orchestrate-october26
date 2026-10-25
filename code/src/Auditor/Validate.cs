@@ -7,22 +7,17 @@ public sealed record Issue(string CaseId, string Code, string Message, string Se
     public override string ToString() => $"[{Severity}] {CaseId}: {Code}: {Message}";
 }
 
-public sealed class ValidationException : Exception
-{
-    public ValidationException(string message) : base(message) { }
-}
-
 /// <summary>
 /// Output validator. Runs on every row before it is written and again on the re-read file. It checks the contract (schema, ordering, evidence rules, status/steps consistency); it never
 /// decides what the right answer is. Hard problems are errors; things the 32 samples always do but the spec does not strictly demand are warnings.
 /// </summary>
 public static class Validator
 {
-    private static string ListRepr(IEnumerable<string> items) => "[" + string.Join(", ", items.Select(Py.StrRepr)) + "]";
+    private static string ListRepr(IEnumerable<string> items) => "[" + string.Join(", ", items.Select(Compat.StrRepr)) + "]";
 
     private static List<Issue> SchemaIssues(string caseId, object? steps)
     {
-        if (steps is not List<object?> list) return new() { new Issue(caseId, "STEPS_NOT_LIST", $"steps_json must be a JSON array, got {Py.TypeName(steps)}") };
+        if (steps is not List<object?> list) return new() { new Issue(caseId, "STEPS_NOT_LIST", $"steps_json must be a JSON array, got {Compat.TypeName(steps)}") };
         var output = new List<Issue>();
         int i = 0;
         foreach (var item in list)
@@ -37,13 +32,13 @@ public static class Validator
             if (s["step_no"] is not (long or System.Numerics.BigInteger)) output.Add(new Issue(caseId, "STEP_NO_TYPE", $"step #{i} step_no must be an integer"));
             foreach (var f in Schema.StepFields.Skip(1))
                 if (s[f] is not string) output.Add(new Issue(caseId, "FIELD_TYPE", $"step #{i} {f} must be a string (use \"\" not null)"));
-            if (s["phase"] is string phase && !Schema.Phases.Contains(phase)) output.Add(new Issue(caseId, "BAD_PHASE", $"step #{i} phase {Py.StrRepr(phase)}"));
+            if (s["phase"] is string phase && !Schema.Phases.Contains(phase)) output.Add(new Issue(caseId, "BAD_PHASE", $"step #{i} phase {Compat.StrRepr(phase)}"));
             else if (s["phase"] is string p && s["operation"] is string op && s["state"] is string st && !Schema.AllowedTriples.Contains((p, op, st)))
                 output.Add(new Issue(caseId, "BAD_TRIPLE", $"step #{i} ({p}, {op}, {st}) not allowed"));
             var sys = s["system_id"] as string; var rid = s["resource_id"] as string;
             if (string.IsNullOrEmpty(sys) || string.IsNullOrEmpty(rid)) output.Add(new Issue(caseId, "EMPTY_ID", $"step #{i} has empty system_id/resource_id"));
             else if (!Schema.ValidResourceId(rid))
-                output.Add(new Issue(caseId, "BAD_RESOURCE_ID", $"step #{i} resource_id {Py.StrRepr(rid.Length > 40 ? rid[..40] : rid)} is not of the form <name>_<number>"));
+                output.Add(new Issue(caseId, "BAD_RESOURCE_ID", $"step #{i} resource_id {Compat.StrRepr(rid.Length > 40 ? rid[..40] : rid)} is not of the form <name>_<number>"));
         }
         return output;
     }
@@ -54,7 +49,7 @@ public static class Validator
 
     public static List<Issue> ValidateCase(string caseId, string status, object? stepsJson, DateTime? auditAt = null, Dataset? ds = null)
     {
-        if (!Schema.Statuses.Contains(status)) return new() { new Issue(caseId, "BAD_STATUS", $"deletion_status {Py.StrRepr(status)} not in ({string.Join(", ", Schema.Statuses.Select(Py.StrRepr))})") };
+        if (!Schema.Statuses.Contains(status)) return new() { new Issue(caseId, "BAD_STATUS", $"deletion_status {Compat.StrRepr(status)} not in ({string.Join(", ", Schema.Statuses.Select(Compat.StrRepr))})") };
         var issues = SchemaIssues(caseId, stepsJson);
         if (issues.Count > 0) return issues;                               // later checks assume well-formed steps
         var steps = ((List<object?>)stepsJson!).Cast<Dictionary<string, object?>>().ToList();
@@ -77,13 +72,13 @@ public static class Validator
         // duplicates
         var dup = steps.GroupBy(s => (Str(s, "phase"), Str(s, "operation"), Str(s, "system_id"), Str(s, "resource_id"))).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
         if (dup.Count > 0)
-            issues.Add(new Issue(caseId, "DUPLICATE", "duplicate steps: [" + string.Join(", ", dup.Take(3).Select(k => $"({Py.StrRepr(k.Item1)}, {Py.StrRepr(k.Item2)}, {Py.StrRepr(k.Item3)}, {Py.StrRepr(k.Item4)})")) + "]"));
+            issues.Add(new Issue(caseId, "DUPLICATE", "duplicate steps: [" + string.Join(", ", dup.Take(3).Select(k => $"({Compat.StrRepr(k.Item1)}, {Compat.StrRepr(k.Item2)}, {Compat.StrRepr(k.Item3)}, {Compat.StrRepr(k.Item4)})")) + "]"));
 
         var phases = steps.GroupBy(s => Str(s, "phase")).ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
         if (status == "COMPLETE")
         {
             if (phases.Keys.Count != 1 || !phases.ContainsKey("VERIFICATION"))
-                issues.Add(new Issue(caseId, "COMPLETE_PHASES", $"COMPLETE rows may only contain VERIFICATION steps, got {{{string.Join(", ", phases.Select(kv => $"{Py.StrRepr(kv.Key)}: {kv.Value}"))}}}"));
+                issues.Add(new Issue(caseId, "COMPLETE_PHASES", $"COMPLETE rows may only contain VERIFICATION steps, got {{{string.Join(", ", phases.Select(kv => $"{Compat.StrRepr(kv.Key)}: {kv.Value}"))}}}"));
         }
         else                                                                // INCOMPLETE
         {
@@ -104,9 +99,9 @@ public static class Validator
             if (cites && ds is not null)
             {
                 var t = ds.CitableTime(evidence);
-                if (t is null) issues.Add(new Issue(caseId, "EVIDENCE_UNKNOWN", $"step {stepNo} cites unknown id {Py.StrRepr(evidence)}"));
+                if (t is null) issues.Add(new Issue(caseId, "EVIDENCE_UNKNOWN", $"step {stepNo} cites unknown id {Compat.StrRepr(evidence)}"));
                 else if (auditAt is not null && t > auditAt)
-                    issues.Add(new Issue(caseId, "EVIDENCE_AFTER_AUDIT", $"step {stepNo} cites {evidence} captured {Py.FormatTs(t.Value)} after audit_at"));
+                    issues.Add(new Issue(caseId, "EVIDENCE_AFTER_AUDIT", $"step {stepNo} cites {evidence} captured {Compat.FormatTs(t.Value)} after audit_at"));
             }
         }
 
@@ -178,7 +173,7 @@ public static class Validator
             line++;
             if (r.Count != 3) { issues.Add(new Issue($"line{line}", "ROW_WIDTH", $"expected 3 columns, got {r.Count}")); continue; }
             object? steps;
-            try { steps = Py.ParseJson(r[2]); }
+            try { steps = Compat.ParseJson(r[2]); }
             catch (DataException e) { issues.Add(new Issue(r[0], "BAD_JSON", e.Message)); continue; }
             rows.Add((r[0], r[1], steps));
         }
@@ -186,12 +181,4 @@ public static class Validator
         return issues;
     }
 
-    public static void RaiseOnErrors(IReadOnlyList<Issue> issues)
-    {
-        var errors = issues.Where(i => i.Severity == "error").ToList();
-        if (errors.Count == 0) return;
-        var sb = new StringBuilder(string.Join("\n", errors.Take(20).Select(i => i.ToString())));
-        if (errors.Count > 20) sb.Append($"\n... {errors.Count} errors total");
-        throw new ValidationException(sb.ToString());
-    }
 }

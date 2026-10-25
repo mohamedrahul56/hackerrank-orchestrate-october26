@@ -95,7 +95,7 @@ public class HardcodingScanTests
     {
         var goldIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var r in Csv.ReadRows(Path.Combine(Repo.Dataset, "sample_output.csv")))
-            foreach (var s in Py.AsList(Py.ParseJson(r.G("steps_json")))) goldIds.Add((string)Py.Get(s, "resource_id")!);
+            foreach (var s in Compat.AsList(Compat.ParseJson(r.G("steps_json")))) goldIds.Add((string)Compat.Get(s, "resource_id")!);
         var evidenceIds = Csv.ReadRows(Path.Combine(Repo.Dataset, "evidence_files.csv")).Select(r => r.G("file_id")).ToHashSet();
         var text = CodeFiles().ToDictionary(p => p, File.ReadAllText);
         var hits = new List<string>();

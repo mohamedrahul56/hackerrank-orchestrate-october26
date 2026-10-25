@@ -58,9 +58,9 @@ public static class Gate
     public static GateResult GateReading(Dictionary<string, object?> submission, string fileId, IReadOnlySet<string> knownFileIds)
     {
         JsonSchemaCheck.Validate(submission, AgentTools.SubmitSchema);                                            // G1
-        if (!knownFileIds.Contains(fileId)) throw new GateException($"{Py.StrRepr(fileId)} is not an evidence file of the manifest");      // G2
+        if (!knownFileIds.Contains(fileId)) throw new GateException($"{Compat.StrRepr(fileId)} is not an evidence file of the manifest");      // G2
         var rej = new List<string>();
-        var records = ((List<object?>)Py.ParseJson(Py.DumpsCompact(submission["records"]))!).Cast<Dictionary<string, object?>>().ToList();      // a deep copy
+        var records = ((List<object?>)Compat.ParseJson(Compat.DumpsCompact(submission["records"]))!).Cast<Dictionary<string, object?>>().ToList();      // a deep copy
         if (submission.TryGetValue("unknown", out var unknown) && unknown is List<object?> unknownList)           // G6
             foreach (var u in unknownList.Cast<Dictionary<string, object?>>())
             {
@@ -75,7 +75,7 @@ public static class Gate
             var rid = ((string)rec["resource_id"]!).Trim();
             if (rid.Length > 0 && !Schema.ValidResourceId(rid))                                                    // G3
             {
-                rej.Add($"G3 record {i}: resource id {Py.StrRepr(Truncate(rid, 30))} is not <name>_<number>: dropped");
+                rej.Add($"G3 record {i}: resource id {Compat.StrRepr(Truncate(rid, 30))} is not <name>_<number>: dropped");
                 continue;
             }
             if (rid.Length == 0 && !Strings(rec["aliases"]).Any(a => a.Trim().Length > 0))
@@ -100,7 +100,7 @@ public static class Gate
             };
             output.Add(cleaned);
         }
-        var screen = submission.TryGetValue("screen", out var sv) ? Py.Str(sv) : "";
+        var screen = submission.TryGetValue("screen", out var sv) ? Compat.Str(sv) : "";
         var reading = new Dictionary<string, object?> { ["screen"] = Truncate(screen, ScreenMax), ["records"] = output };   // G7: unknown[] and prose do not travel further
         JsonSchemaCheck.Validate(reading, ImageObs.Schema);
         return new GateResult(reading, rej);

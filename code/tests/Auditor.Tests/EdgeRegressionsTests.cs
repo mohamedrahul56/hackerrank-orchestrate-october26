@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 
@@ -42,16 +41,16 @@ public class ZoneLessTimestampTests : EdgeBase
     public void ParseTsReadsAZoneLessTimeAsUtc()
     {
         // S-T06: a timestamp without a zone used to be read in the machine's local time zone.
-        Assert.Equal(new DateTime(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc), Py.ParseTs("2026-08-20T09:00:00"));
-        Assert.Equal(new DateTime(2026, 8, 20, 0, 0, 0, DateTimeKind.Utc), Py.ParseTs("2026-08-20"));
-        Assert.Equal(DateTimeKind.Utc, Py.ParseTs("2026-08-20T09:00:00").Kind);
+        Assert.Equal(new DateTime(2026, 8, 20, 9, 0, 0, DateTimeKind.Utc), Compat.ParseTs("2026-08-20T09:00:00"));
+        Assert.Equal(new DateTime(2026, 8, 20, 0, 0, 0, DateTimeKind.Utc), Compat.ParseTs("2026-08-20"));
+        Assert.Equal(DateTimeKind.Utc, Compat.ParseTs("2026-08-20T09:00:00").Kind);
     }
 
     [Fact]
     public void ZonedTimesAreUnchanged()
     {
-        Assert.Equal(Py.ParseTs("2026-08-20T09:00:00Z"), Py.ParseTs("2026-08-20T11:00:00+02:00"));
-        Assert.Equal(DateTimeKind.Utc, Py.ParseTs("2026-08-20T09:00:00Z").Kind);
+        Assert.Equal(Compat.ParseTs("2026-08-20T09:00:00Z"), Compat.ParseTs("2026-08-20T11:00:00+02:00"));
+        Assert.Equal(DateTimeKind.Utc, Compat.ParseTs("2026-08-20T09:00:00Z").Kind);
     }
 
     [Fact]
@@ -102,9 +101,9 @@ public class UnreadableHoldEndTests : EdgeBase
             if (until is null)
             {
                 var p = Path.Combine(root, "evidence", "evidence_x2.json");
-                var doc = (Dictionary<string, object?>)Py.ParseJson(File.ReadAllText(p))!;
-                Py.AsDict(Py.AsList(doc["records"])[0]).Remove("retained_until");
-                File.WriteAllText(p, Py.DumpsCompact(doc));
+                var doc = (Dictionary<string, object?>)Compat.ParseJson(File.ReadAllText(p))!;
+                Compat.AsDict(Compat.AsList(doc["records"])[0]).Remove("retained_until");
+                File.WriteAllText(p, Compat.DumpsCompact(doc));
             }
             var (r, ops, _) = Ops(root);
             shapes.Add((r.Status, string.Join(";", ops.OrderBy(o => o, Comparer<(string, string)>.Create((x, y) => { int c = string.CompareOrdinal(x.Item1, y.Item1); return c != 0 ? c : string.CompareOrdinal(x.Item2, y.Item2); })))));

@@ -10,7 +10,7 @@ JSON facts. (No model reads request text: ambiguous request wording is `NOT_APPL
 
 ## Quick start
 
-Needs the [.NET 10 SDK](https://dotnet.microsoft.com/download) and nothing else (no Python, no API key, no network after the first `dotnet restore`).
+Needs the [.NET 10 SDK](https://dotnet.microsoft.com/download) and nothing else (no API key, no network after the first `dotnet restore`).
 
 ```bash
 git clone <this repository> && cd <it>
@@ -141,7 +141,7 @@ Nothing in the table was measured against a real model: the model path is tested
 | decision | rejected alternative | why |
 |---|---|---|
 | Deterministic rules decide; a model only reads screenshots | one LLM call per case with the evidence in the prompt | reproducible, auditable, injection-resistant, almost free; evidence is structured so rules suffice |
-| Omit a step when candidates cannot be separated | guess the single most plausible account | a guess among 2 is break-even for F1 (p about 50%), among 3 or more it loses (`phase3_results.md` section 4) |
+| Omit a step when candidates cannot be separated | guess the single most plausible account | a guess among 2 is break-even for F1 (p about 50%), among 3 or more it loses (`ARCHITECTURE.md`, decision D2) |
 | Hold-out measurement of the discovery (hide explicit links, re-find them, count `stolen`) | judging it by the 32 labeled samples alone | too few labels; the hold-out found a real defect the sample score hid |
 | Cohort-snapshot narrowing OFF | keep it (it looked right on the samples) | hold-out precision 85.1% vs 100% (`evaluation_report.md` section 5.3) |
 | Later evidence only links, never gives state | use any file for state | evidence after `audit_at` cannot change the answer at `audit_at` |
@@ -153,7 +153,7 @@ Nothing in the table was measured against a real model: the model path is tested
 
 Labeled samples (32): status 32/32, step precision 100%, recall 98.4%, step F1 99.2%; the 9 cases not tuned against in Phase 2-3: status 9/9, F1 100%. Main set (518, no labels):
 COMPLETE 152, INCOMPLETE 356, NOT_APPLICABLE 10. 23 synthetic cases (`code/evaluation/extra_cases.md`) pass. Model usage in the final run: 0 calls (`code/evaluation/usage_report.md`).
-Edge-case sweep (`code/evaluation/edge_case_sweep.md`, a frozen record of the 118-scenario sweep run on the Python implementation: 116 OK and 2 documented decisions; its first run on the earlier code found 8 real defects, all fixed with regression tests that now live in `EdgeRegressionsTests`).
+An earlier sweep of 118 hand-written edge-case scenarios found 8 real defects, all fixed; each has a regression test in `EdgeRegressionsTests`.
 The 32 labels were all read in Phase 0 to infer the rules, so none of these numbers is an independent test.
 
 ## Known weaknesses (honest list)
@@ -179,8 +179,23 @@ The 32 labels were all read in Phase 0 to infer the rules, so none of these numb
 
 ## Repository layout
 
-`code/Auditor.sln` - `code/src/Auditor/` the library - `code/src/Auditor.Cli/` the command line (entry point) - `code/tests/Auditor.Tests/` the xUnit suite - `code/tools/Auditor.Tools/` scorer, baselines, hold-out,
-reports, performance profiling, mutation check, packaging and final checklist (one program with sub-commands) - `code/evaluation/` the generated reports (`evaluation_report.md`, `usage_report.md`, `extra_cases.md`,
-`CHANGELOG.md` loop log) - `code/prompts/` and `code/config/` - `code/NOTES.md`, `code/SPEC.md` working notes - `code/INTERVIEW_PREP.md`. `dataset/` is read-only input and is never copied into `code.zip`; keys, `code/out/`,
-caches and `code/config/prices.json` are never committed or zipped. No Python remains in the repository: reports that were produced by Python-only measurement scripts (determinism matrix, coverage, phase 2-4 ablations,
-edge-case sweep) are kept as frozen records and say so at their top; the properties they measured are re-checked by xUnit tests (`DeterminismTests`, `EdgeRegressionsTests`, `InvariantsTests`).
+```text
+AGENTS.md, CLAUDE.md, problem_statement.md, agent_trace_instructions.md   challenge instructions (not part of the solution)
+README.md, ARCHITECTURE.md, Makefile                                      documentation and common tasks
+output.csv, output.notes.md                                               the submitted answers and the run notes (output.usage.jsonl is written by each run, git-ignored)
+log.txt                                                                   the chat transcript the challenge asks for
+dataset/                                                                  read-only input; never copied into code.zip
+code/
+  Auditor.sln, Directory.Build.props, Directory.Packages.props            solution, shared compiler settings (warnings are errors), central NuGet versions
+  src/Auditor/                                                            the library: classify, identity, evidence parsers, link, discover, state, policy, audit, validate
+  src/Auditor/Agent/                                                      the opt-in screenshot reader (bounded tool loop and its gate)
+  src/Auditor.Cli/                                                        the command line (entry point)
+  tests/Auditor.Tests/                                                    the xUnit suite (Fixtures/ holds the annotated request sentences)
+  tools/Auditor.Tools/                                                    scorer, baselines, hold-out, report generators, performance profiling, mutation check, packaging, final checklist
+  config/                                                                 settings.toml (every setting documented) and prices.example.json (the real prices.json is git-ignored)
+  prompts/                                                                versioned prompt files of the screenshot reader
+  evaluation/                                                             generated reports: evaluation_report.md, usage_report.md, performance_report.md, agent_layer_report.md, mutation_check.md, extra_cases*.md, baseline_results.md; CHANGELOG.md is the change log
+```
+
+`code.zip` never contains `dataset/`, keys, `code/out/`, caches, build output or `code/config/prices.json`. `Compat.cs` keeps the formatting rules (CSV dialect, JSON escaping, float text) that the first, Python, version of this
+project used, so `output.csv` stayed byte-identical through the port to C#.

@@ -23,7 +23,7 @@ public sealed class UsageLog
             if (Path is null) return;
             var dir = System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(Path));
             if (dir is not null) Directory.CreateDirectory(dir);
-            File.AppendAllText(Path, PyJsonSorted.Dumps(row) + "\n", new UTF8Encoding(false));
+            File.AppendAllText(Path, SortedJson.Dumps(row) + "\n", new UTF8Encoding(false));
         }
     }
 }
@@ -46,19 +46,19 @@ public static class JsonSchemaCheck
             "number" => value is long or double or System.Numerics.BigInteger or bool,
             _ => true,
         };
-        if (!ok) throw new SchemaException($"{path}: expected {t}, got {Py.TypeName(value)}");
+        if (!ok) throw new SchemaException($"{path}: expected {t}, got {Compat.TypeName(value)}");
         if (schema.TryGetValue("enum", out var en) && en is List<object?> allowed && !allowed.Any(a => Equals(a, value)))
-            throw new SchemaException($"{path}: {Py.Repr(value)} not in {Py.Repr(en)}");
+            throw new SchemaException($"{path}: {Compat.Repr(value)} not in {Compat.Repr(en)}");
         if (t == "object" && value is Dictionary<string, object?> obj)
         {
             if (schema.TryGetValue("required", out var req) && req is List<object?> required)
                 foreach (var k in required.OfType<string>())
-                    if (!obj.ContainsKey(k)) throw new SchemaException($"{path}: missing required key {Py.StrRepr(k)}");
+                    if (!obj.ContainsKey(k)) throw new SchemaException($"{path}: missing required key {Compat.StrRepr(k)}");
             var props = schema.TryGetValue("properties", out var p) && p is Dictionary<string, object?> pd ? pd : new Dictionary<string, object?>();
             if (schema.TryGetValue("additionalProperties", out var ap) && ap is false)
             {
                 var extra = obj.Keys.Where(k => !props.ContainsKey(k)).OrderBy(k => k, StringComparer.Ordinal).ToList();
-                if (extra.Count > 0) throw new SchemaException($"{path}: unexpected keys {Py.ListRepr(extra)}");
+                if (extra.Count > 0) throw new SchemaException($"{path}: unexpected keys {Compat.ListRepr(extra)}");
             }
             foreach (var (k, sub) in props)
                 if (obj.TryGetValue(k, out var child)) Validate(child, (Dictionary<string, object?>)sub!, $"{path}.{k}");
@@ -152,7 +152,7 @@ public sealed class Llm
     /// </summary>
     public string CacheKey(string fileHash, string promptVersion, string model, Dictionary<string, object?> schema, string system = "", string instruction = "")
     {
-        var blob = PyJsonSorted.Dumps(new Dictionary<string, object?>
+        var blob = SortedJson.Dumps(new Dictionary<string, object?>
         {
             ["fmt"] = (long)Versions.LlmCacheFormat, ["f"] = fileHash, ["p"] = promptVersion, ["pt"] = Versions.DigestText(system, instruction), ["m"] = model, ["s"] = schema,
             ["pipeline"] = Stamp.Pipeline, ["rules"] = Stamp.Rules,
@@ -163,7 +163,7 @@ public sealed class Llm
     public Dictionary<string, object?>? CacheGet(string key)
     {
         var p = Path.Combine(CacheDir, key + ".json");
-        try { return File.Exists(p) ? Py.ParseJson(Py.ReadText(p)) as Dictionary<string, object?> : null; }
+        try { return File.Exists(p) ? Compat.ParseJson(Compat.ReadText(p)) as Dictionary<string, object?> : null; }
         catch (Exception e) when (e is IOException or DataException) { return null; }      // a corrupt cache entry is just a miss
     }
 
@@ -171,7 +171,7 @@ public sealed class Llm
     {
         Directory.CreateDirectory(CacheDir);
         var tmp = Path.Combine(CacheDir, $".{key}.{Environment.CurrentManagedThreadId}.tmp");        // write then rename: a reader never sees half an entry
-        File.WriteAllText(tmp, PyJsonSorted.Dumps(value), new UTF8Encoding(false));
+        File.WriteAllText(tmp, SortedJson.Dumps(value), new UTF8Encoding(false));
         File.Move(tmp, Path.Combine(CacheDir, key + ".json"), overwrite: true);
     }
 
@@ -333,7 +333,7 @@ public sealed class Llm
             int nl = s.IndexOf('\n', StringComparison.Ordinal);
             s = nl >= 0 ? s[(nl + 1)..] : s;
         }
-        return Py.ParseJson(s);
+        return Compat.ParseJson(s);
     }
 
     public static string Now() => DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);

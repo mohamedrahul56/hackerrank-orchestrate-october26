@@ -1,20 +1,21 @@
+# secrets and local configuration
 .env
-__pycache__/
-*.pyc
-.venv/
-venv/
-node_modules/
-code.zip
-code/.cache/
-.mypy_cache/
-.ruff_cache/
-code/out/
 code/config/prices.json
-agent-trace/
-agent-trace.zip
-*.usage.jsonl
-*.partial.jsonl
+
+# build output
 bin/
 obj/
-*.user
 TestResults/
+*.user
+.vs/
+
+# generated at run time
+code.zip
+code/.cache/
+code/out/
+*.usage.jsonl
+*.partial.jsonl
+
+# agent trace export (made by hand at submission time)
+agent-trace/
+agent-trace.zip

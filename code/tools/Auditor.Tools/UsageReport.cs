@@ -12,7 +12,7 @@ public static class UsageReport
     /// <summary>{"A": 1, "B": 2} → "A 1, B 2" (sorted by key), so reports never print a raw collection.</summary>
     public static string Kv(IEnumerable<KeyValuePair<string, object?>> items)
     {
-        var parts = items.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => $"{kv.Key} {Py.Str(kv.Value)}").ToList();
+        var parts = items.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => $"{kv.Key} {Compat.Str(kv.Value)}").ToList();
         return parts.Count == 0 ? "none" : string.Join(", ", parts);
     }
 
@@ -23,15 +23,15 @@ public static class UsageReport
         foreach (var line in File.ReadAllText(path, new UTF8Encoding(false)).Split('\n'))
         {
             if (line.Trim().Length == 0) continue;
-            try { if (Py.ParseJson(line) is Dictionary<string, object?> d) rows.Add(d); }
+            try { if (Compat.ParseJson(line) is Dictionary<string, object?> d) rows.Add(d); }
             catch (DataException) { }                                  // a torn last line must not break the report
         }
         return rows;
     }
 
-    private static string S(Dictionary<string, object?> r, string k, string dflt = "") => r.TryGetValue(k, out var v) && v is not null ? Py.Str(v) : dflt;
+    private static string S(Dictionary<string, object?> r, string k, string dflt = "") => r.TryGetValue(k, out var v) && v is not null ? Compat.Str(v) : dflt;
     private static long N(Dictionary<string, object?> r, string k, long dflt = 0) => r.TryGetValue(k, out var v) && v is long l ? l : v is double d ? (long)d : dflt;
-    private static bool B(Dictionary<string, object?> r, string k) => r.TryGetValue(k, out var v) && Py.Truthy(v);
+    private static bool B(Dictionary<string, object?> r, string k) => r.TryGetValue(k, out var v) && Compat.Truthy(v);
     private static string Money(double x, int places) => "$" + x.ToString("F" + places, CultureInfo.InvariantCulture);
 
     private sealed class Agg { public long Requests, Calls, Input, Output, CacheRead; }
@@ -52,12 +52,12 @@ public static class UsageReport
         };
         if (info is not null)
         {
-            var counts = Py.Get(info, "status_counts") as Dictionary<string, object?> ?? new();
-            var prov = (Py.Get(info, "provisional_rows") as List<object?>) ?? new();
+            var counts = Compat.Get(info, "status_counts") as Dictionary<string, object?> ?? new();
+            var prov = (Compat.Get(info, "provisional_rows") as List<object?>) ?? new();
             L.Add($"* run that produced `{S(info, "output_file")}` (sha256 `{S(info, "output_sha256")[..Math.Min(16, S(info, "output_sha256").Length)]}...`): {N(info, "requests")} requests, status counts {Kv(counts)}, "
                   + $"images read by a vision model: **{(B(info, "images_read_by_model") ? "yes" : "no")}**, images read from a readings file: **{(B(info, "images_read_from_file") ? "yes" : "no")}**, "
                   + $"API key present in the environment: **{(B(info, "api_key_present") ? "yes" : "no")}** (presence only)");
-            L.Add($"* provisional rows in that output ({prov.Count}): {(prov.Count > 0 ? string.Join(", ", prov.Select(Py.Str)) : "none")}");
+            L.Add($"* provisional rows in that output ({prov.Count}): {(prov.Count > 0 ? string.Join(", ", prov.Select(Compat.Str)) : "none")}");
             L.Add("");
         }
         if (hits.Count > 0) L.AddRange(new[] { $"> **Not a cold-cache run**: the log contains {hits.Count} cache hits. Delete the cache directory and rerun before submitting this report.", "" });
@@ -115,12 +115,12 @@ public static class UsageReport
         });
         if (prices.Count > 0)
             L.AddRange(prices.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv =>
-                $"* {kv.Key}: input {Py.FloatRepr(kv.Value.InputPerMtok)}/Mtok, output {Py.FloatRepr(kv.Value.OutputPerMtok)}/Mtok"
-                + (kv.Value.CacheReadPerMtok is { } cr ? $", cached input {Py.FloatRepr(cr)}/Mtok" : "") + $" - source {kv.Value.SourceUrl}, dated {kv.Value.Date} (supplied by the participant)"));
+                $"* {kv.Key}: input {Compat.FloatRepr(kv.Value.InputPerMtok)}/Mtok, output {Compat.FloatRepr(kv.Value.OutputPerMtok)}/Mtok"
+                + (kv.Value.CacheReadPerMtok is { } cr ? $", cached input {Compat.FloatRepr(cr)}/Mtok" : "") + $" - source {kv.Value.SourceUrl}, dated {kv.Value.Date} (supplied by the participant)"));
         else
             L.Add($"* {Prices.NotSupplied}." + (priceProblems.Count > 0 ? "  " + string.Join("; ", priceProblems).Replace(root + "/", "", StringComparison.Ordinal) : ""));
         if (byModel.Count > 0 && !pricedAll && prices.Count > 0)
-            L.Add($"* models without a complete price entry: {Py.ListRepr(byModel.Keys.Select(k => k.Item2).Where(m => !prices.ContainsKey(m)).Distinct().OrderBy(m => m, StringComparer.Ordinal))}");
+            L.Add($"* models without a complete price entry: {Compat.ListRepr(byModel.Keys.Select(k => k.Item2).Where(m => !prices.ContainsKey(m)).Distinct().OrderBy(m => m, StringComparer.Ordinal))}");
         if (fromFile.Count > 0)
             L.AddRange(new[]
             {

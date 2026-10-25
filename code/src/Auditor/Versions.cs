@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using Auditor.Agent;
@@ -51,7 +50,7 @@ public static class Versions
     {
         var output = new Dictionary<string, PromptStamp>(StringComparer.Ordinal)
         {
-            ["image_reading"] = new(ImageObs.PromptVersion, DigestText(ImageObs.System, ImageObs.Instruction, PyJsonSorted.Dumps(ImageObs.Schema))),
+            ["image_reading"] = new(ImageObs.PromptVersion, DigestText(ImageObs.System, ImageObs.Instruction, SortedJson.Dumps(ImageObs.Schema))),
         };
         try                                                   // the agent layer's prompt files and tool definitions (code/prompts/, Agent/AgentTools.cs)
         {

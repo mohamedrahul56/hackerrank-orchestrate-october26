@@ -48,7 +48,7 @@ public static class LogObs
 
     public static void LoadLog(EvidenceBase b, string fileId, string path, DateTime fileT)
     {
-        var events = LogParse.ParseLog(Py.ReadText(path, replaceInvalid: true));
+        var events = LogParse.ParseLog(Compat.ReadText(path, replaceInvalid: true));
         var groups = new Dictionary<string, List<LogParse.LogEvent>>(StringComparer.Ordinal);
         foreach (var e in events)
         {
@@ -62,7 +62,7 @@ public static class LogObs
             foreach (var e in evs)
             {
                 var f = e.Fields;
-                var parsed = Py.ParseTs(e.Ts);
+                var parsed = Compat.ParseTs(e.Ts);
                 var t = parsed <= fileT ? parsed : fileT;
                 if (e.Event == "record_lookup")
                 {

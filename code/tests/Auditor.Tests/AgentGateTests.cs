@@ -29,15 +29,15 @@ public class GateRulesTests
     private static GateResult Run(params Dictionary<string, object?>[] records) => Gate.GateReading(Sub(records), File, Known);
     private static GateResult RunWith(Dictionary<string, object?> record, List<object?>? unknown = null, object? screen = null) => Gate.GateReading(Sub(new[] { record }, unknown, screen), File, Known);
     private static Dictionary<string, object?> U(long index, string field, string reason) => new() { ["record_index"] = index, ["field"] = field, ["reason"] = reason };
-    private static List<Dictionary<string, object?>> Records(GateResult r) => Py.AsList(r.Reading["records"]).Cast<Dictionary<string, object?>>().ToList();
-    private static List<string> Strs(object? v) => Py.AsList(v).Cast<string>().ToList();
+    private static List<Dictionary<string, object?>> Records(GateResult r) => Compat.AsList(r.Reading["records"]).Cast<Dictionary<string, object?>>().ToList();
+    private static List<string> Strs(object? v) => Compat.AsList(v).Cast<string>().ToList();
 
     [Fact]
     public void G1_Schema()
     {
         Assert.Single(Records(Run(Rec())));
         foreach (var bad in new[] { "{\"screen\": \"x\"}", "{\"screen\": \"x\", \"records\": [{\"resource_id\": \"account_1\"}]}", "{\"screen\": \"x\", \"records\": [], \"evidence_id\": \"evidence_09\"}", "{\"screen\": 1, \"records\": []}" })
-            Assert.Throws<SchemaException>(() => Gate.GateReading((Dictionary<string, object?>)Py.ParseJson(bad)!, File, Known));
+            Assert.Throws<SchemaException>(() => Gate.GateReading((Dictionary<string, object?>)Compat.ParseJson(bad)!, File, Known));
     }
 
     [Fact]
@@ -115,7 +115,7 @@ public class GateRulesTests
     {
         var b = new EvidenceBase();
         var reading = Run(Rec("account_5762"), Rec("search_428", ("emails", L("a@example.test")))).Reading;
-        var n = ImageObs.ObservationsFromReading(b, File, Py.ParseTs("2026-09-26T11:00:00Z"), reading, new List<CatalogRow>(), StateResolver.AgentSource);
+        var n = ImageObs.ObservationsFromReading(b, File, Compat.ParseTs("2026-09-26T11:00:00Z"), reading, new List<CatalogRow>(), StateResolver.AgentSource);
         Assert.Equal(2, n);
         Assert.Equal(new[] { (File, StateResolver.AgentSource) }, b.Obs.Select(o => (o.FileId, o.Source)).Distinct());
     }
@@ -140,7 +140,7 @@ public class GateRulesTests
             try { res = Gate.GateReading(candidate, File, Known); }
             catch (Exception e) when (e is SchemaException or GateException) { continue; }
             var b = new EvidenceBase();
-            ImageObs.ObservationsFromReading(b, File, Py.ParseTs("2026-09-26T11:00:00Z"), res.Reading, new List<CatalogRow>(), StateResolver.AgentSource);
+            ImageObs.ObservationsFromReading(b, File, Compat.ParseTs("2026-09-26T11:00:00Z"), res.Reading, new List<CatalogRow>(), StateResolver.AgentSource);
             foreach (var o in b.Obs)
             {
                 Assert.Equal((File, StateResolver.AgentSource), (o.FileId, o.Source));

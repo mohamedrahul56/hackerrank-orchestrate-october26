@@ -1,18 +1,12 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <PackageReference Include="Anthropic" Version="13.3.0" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.13" />
-    <PackageReference Include="PdfPig" Version="0.1.16" />
-    <PackageReference Include="SkiaSharp" Version="4.153.1" />
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.1" />
-    <PackageReference Include="Tomlyn" Version="2.10.1" />
+    <PackageReference Include="Anthropic" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="PdfPig" />
+    <PackageReference Include="SkiaSharp" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
+    <PackageReference Include="Tomlyn" />
   </ItemGroup>
 
   <ItemGroup>

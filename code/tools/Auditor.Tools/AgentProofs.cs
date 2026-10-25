@@ -63,7 +63,7 @@ public static class AgentProofs
         var local = Path.Combine(root, "code", "out", "agent_readings.json");
         if (File.Exists(local))
         {
-            var readings = Py.AsDict(Py.AsDict(Py.ParseJson(File.ReadAllText(local)))["readings"]);
+            var readings = Compat.AsDict(Compat.AsDict(Compat.ParseJson(File.ReadAllText(local)))["readings"]);
             var client = new ScriptedClient(readings);
             int rc3, rc4;
             using (CleanEnv())

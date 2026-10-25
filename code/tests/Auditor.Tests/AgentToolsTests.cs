@@ -25,9 +25,9 @@ public class AgentToolSpecsTests
         var reading = ((Dictionary<string, object?>)ImageObs.Schema["properties"]!).Keys.ToHashSet();
         Assert.Equal(new[] { "unknown" }, submit.Except(reading));
         Assert.Equal(new[] { "screen", "records" }, ((List<object?>)AgentTools.SubmitSchema["required"]!).Cast<string>());
-        JsonSchemaCheck.Validate(Py.ParseJson("{\"screen\": \"s\", \"records\": []}"), AgentTools.SubmitSchema);
-        JsonSchemaCheck.Validate(Py.ParseJson("{\"screen\": \"s\", \"records\": [], \"unknown\": [{\"record_index\": 0, \"field\": \"emails\", \"reason\": \"r\"}]}"), AgentTools.SubmitSchema);
-        Assert.Throws<SchemaException>(() => JsonSchemaCheck.Validate(Py.ParseJson("{\"screen\": \"s\", \"records\": [], \"unknown\": [{\"record_index\": \"0\", \"field\": \"emails\", \"reason\": \"r\"}]}"), AgentTools.SubmitSchema));
+        JsonSchemaCheck.Validate(Compat.ParseJson("{\"screen\": \"s\", \"records\": []}"), AgentTools.SubmitSchema);
+        JsonSchemaCheck.Validate(Compat.ParseJson("{\"screen\": \"s\", \"records\": [], \"unknown\": [{\"record_index\": 0, \"field\": \"emails\", \"reason\": \"r\"}]}"), AgentTools.SubmitSchema);
+        Assert.Throws<SchemaException>(() => JsonSchemaCheck.Validate(Compat.ParseJson("{\"screen\": \"s\", \"records\": [], \"unknown\": [{\"record_index\": \"0\", \"field\": \"emails\", \"reason\": \"r\"}]}"), AgentTools.SubmitSchema));
     }
 
     [Fact]

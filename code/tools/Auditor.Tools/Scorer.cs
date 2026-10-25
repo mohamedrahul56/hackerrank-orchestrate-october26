@@ -20,7 +20,7 @@ public static class Scorer
         public Dictionary<string, object?> Fields { get; }
         public RawStep(Dictionary<string, object?> fields) => Fields = fields;
         public object? Get(string f) => Fields.TryGetValue(f, out var v) ? v : "";
-        public string Text(string f) => Py.Str(Get(f));
+        public string Text(string f) => Compat.Str(Get(f));
     }
 
     public sealed record Row(string Status, List<RawStep> Steps, string Error = "");
@@ -34,7 +34,7 @@ public static class Scorer
             var steps = new List<RawStep>();
             try
             {
-                var parsed = Py.ParseJson(r.G("steps_json"));
+                var parsed = Compat.ParseJson(r.G("steps_json"));
                 if (parsed is List<object?> list && list.All(x => x is Dictionary<string, object?>))
                     steps = list.Select(x => new RawStep((Dictionary<string, object?>)x!)).ToList();
                 else err = "steps_json is not an array of objects";
@@ -73,7 +73,7 @@ public static class Scorer
         null => "n",
         string s => "s" + s,
         long l => "i" + l.ToString(CultureInfo.InvariantCulture),
-        _ => "o" + Py.Repr(o),
+        _ => "o" + Compat.Repr(o),
     };
 
     public static string Full(RawStep s) => string.Join("\u0001", ContentFields.Select(f => Tag(s.Get(f))));
@@ -237,7 +237,7 @@ public static class Scorer
     public static string Pct(double x) => (100 * x).ToString("F1", CultureInfo.InvariantCulture) + "%";
 
     private static string StepStr(RawStep s) =>
-        $"{Py.Str(s.Get("phase"))[..Math.Min(4, Py.Str(s.Get("phase")).Length)]} {s.Text("operation")} {s.Text("system_id")}/{s.Text("resource_id")}" + (s.Text("evidence_id").Length > 0 ? $" @{s.Text("evidence_id")}" : "");
+        $"{Compat.Str(s.Get("phase"))[..Math.Min(4, Compat.Str(s.Get("phase")).Length)]} {s.Text("operation")} {s.Text("system_id")}/{s.Text("resource_id")}" + (s.Text("evidence_id").Length > 0 ? $" @{s.Text("evidence_id")}" : "");
 
     public static List<string> SummaryLines(Metrics m, string title)
     {

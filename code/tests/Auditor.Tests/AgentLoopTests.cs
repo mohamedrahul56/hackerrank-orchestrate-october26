@@ -48,7 +48,7 @@ public abstract class AgentLoopBase : IDisposable
     protected Dictionary<string, object?> Read(AgentImageReader rd, string? path = null) => rd.Read(path ?? Png, "", "", new(), "");
 
     protected List<Dictionary<string, object?>> Usage() =>
-        File.Exists(Dir.File("usage.jsonl")) ? File.ReadAllLines(Dir.File("usage.jsonl")).Where(l => l.Length > 0).Select(l => Py.AsDict(Py.ParseJson(l))).ToList() : new();
+        File.Exists(Dir.File("usage.jsonl")) ? File.ReadAllLines(Dir.File("usage.jsonl")).Where(l => l.Length > 0).Select(l => Compat.AsDict(Compat.ParseJson(l))).ToList() : new();
 
     protected static ToolResultBlock LastResult(ModelRequest call) => (ToolResultBlock)call.Messages[^1].Content[0];
     protected static string ResultText(ToolResultBlock r) => string.Concat(r.Content.OfType<TextBlock>().Select(t => t.Text));
@@ -61,7 +61,7 @@ public class AgentSuccessTests : AgentLoopBase
     {
         var rd = Reader(new object[] { Submit() });
         var reading = Read(rd);
-        Assert.Equal("account_5762", Py.Get(Py.AsList(reading["records"])[0], "resource_id"));
+        Assert.Equal("account_5762", Compat.Get(Compat.AsList(reading["records"])[0], "resource_id"));
         var call = Assert.Single(Fake.Calls);
         Assert.Equal(new[] { "zoom_region", "submit_reading" }, call.Tools!.Select(t => t.Name));
         Assert.Contains("role", call.System, StringComparison.OrdinalIgnoreCase);
@@ -79,7 +79,7 @@ public class AgentSuccessTests : AgentLoopBase
         var result = (ToolResultBlock)second[2].Content[0];
         Assert.Equal("tu_zoom_region_1", result.ToolUseId);
         Assert.IsType<ImageBlock>(result.Content[0]);
-        var row = Usage().First(r => Py.Get(r, "kind") as string == "agent_image");
+        var row = Usage().First(r => Compat.Get(r, "kind") as string == "agent_image");
         Assert.Equal(new object[] { 2L, 2L, 1L, 200L, 40L }, new[] { row["calls"], row["tool_calls"], row["zooms"], row["input_tokens"], row["output_tokens"] });
         Assert.Equal("unpriced", row["price_source"]);
         Assert.Null(row["cost_usd"]);
@@ -90,7 +90,7 @@ public class AgentSuccessTests : AgentLoopBase
     {
         var rd = Reader(new object[] { Submit() });
         var a = Read(rd); var b = Read(rd);
-        Assert.Equal(PyJsonSorted.Dumps(a), PyJsonSorted.Dumps(b));
+        Assert.Equal(SortedJson.Dumps(a), SortedJson.Dumps(b));
         Assert.Single(Fake.Calls);
         Assert.Equal(new[] { false, true }, Usage().Select(r => (bool)r["cache_hit"]!));
     }
@@ -100,9 +100,9 @@ public class AgentSuccessTests : AgentLoopBase
     {
         var rd = Reader(new object[] { Submit(1, Record(over: ("emails", L("bad address", "ok@example.test")))) });
         var reading = Read(rd);
-        Assert.Equal(new[] { "ok@example.test" }, Py.AsList(Py.Get(Py.AsList(reading["records"])[0], "emails")).Cast<string>());
-        var raw = Py.AsDict(Py.ParseJson(File.ReadAllText(Directory.GetFiles(Dir.File("cache"), "*.json").First())));
-        Assert.Equal(new[] { "bad address", "ok@example.test" }, Py.AsList(Py.Get(Py.AsList(raw["records"])[0], "emails")).Cast<string>());
+        Assert.Equal(new[] { "ok@example.test" }, Compat.AsList(Compat.Get(Compat.AsList(reading["records"])[0], "emails")).Cast<string>());
+        var raw = Compat.AsDict(Compat.ParseJson(File.ReadAllText(Directory.GetFiles(Dir.File("cache"), "*.json").First())));
+        Assert.Equal(new[] { "bad address", "ok@example.test" }, Compat.AsList(Compat.Get(Compat.AsList(raw["records"])[0], "emails")).Cast<string>());
         var d2 = Dir.File("prompts2");
         Directory.CreateDirectory(d2);
         foreach (var n in new[] { "image_reader.system.md", "image_reader.task.md" })
@@ -191,7 +191,7 @@ public class AgentRefusalTests : AgentLoopBase
     public void TheFallbackModelCanStillSucceed()
     {
         var rd = Reader(new object[] { Stop("refusal"), Submit() });
-        Assert.Equal("account_5762", Py.Get(Py.AsList(Read(rd)["records"])[0], "resource_id"));
+        Assert.Equal("account_5762", Compat.Get(Compat.AsList(Read(rd)["records"])[0], "resource_id"));
         Assert.Equal(new[] { "claude-haiku-5-5", "claude-sonnet-5-5" }, Fake.Calls.Select(c => c.Model));
     }
 }
@@ -299,7 +299,7 @@ public class AgentRepeatedCallTests : AgentLoopBase
         var again = LastResult(Fake.Calls[2]);
         Assert.Equal("tu_zoom_region_2", again.ToolUseId);
         Assert.IsType<ImageBlock>(again.Content[0]);
-        Assert.Equal(1L, Usage().First(r => Py.Get(r, "kind") as string == "agent_image")["zooms"]);        // the repeated call was not executed again
+        Assert.Equal(1L, Usage().First(r => Compat.Get(r, "kind") as string == "agent_image")["zooms"]);        // the repeated call was not executed again
     }
 
     [Fact]
@@ -320,7 +320,7 @@ public class AgentFakeEvidenceAndInjectionTests : AgentLoopBase
         var rd = Reader(new object[] { Msg(Use("submit_reading", submission, 1)), Submit(2) });
         var reading = Read(rd);
         Assert.True(LastResult(Fake.Calls[1]).IsError);
-        Assert.DoesNotContain("evidence_id", Py.DumpsCompact(reading), StringComparison.Ordinal);
+        Assert.DoesNotContain("evidence_id", Compat.DumpsCompact(reading), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -341,8 +341,8 @@ public class AgentFakeEvidenceAndInjectionTests : AgentLoopBase
             Submit(1, Record("data_flow_1", ("status_words", L("Healthy", inj)), ("aliases", L(inj))), Record("../../etc/passwd"), Record(inj), Record("cache_101; DROP TABLE x")),
         });
         var reading = Read(rd);
-        Assert.Equal(new[] { "data_flow_1" }, Py.AsList(reading["records"]).Select(r => (string)Py.Get(r, "resource_id")!));
-        Assert.Equal(new[] { "Healthy" }, ImageObs.Sanitize(Py.AsList(reading["records"])[0]).StatusWords);
+        Assert.Equal(new[] { "data_flow_1" }, Compat.AsList(reading["records"]).Select(r => (string)Compat.Get(r, "resource_id")!));
+        Assert.Equal(new[] { "Healthy" }, ImageObs.Sanitize(Compat.AsList(reading["records"])[0]).StatusWords);
         Assert.Equal(3, rd.Notes.Count(n => n.Contains("G3", StringComparison.Ordinal)));
     }
 

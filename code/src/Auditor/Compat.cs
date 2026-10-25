@@ -5,25 +5,12 @@ using System.Text.RegularExpressions;
 
 namespace Auditor;
 
-/// <summary>A malformed value in the data (the .NET counterpart of the ValueError / KeyError / TypeError / AttributeError the loaders recover from).</summary>
-public sealed class DataException : Exception
-{
-    public DataException(string message) : base(message) { }
-}
-
-/// <summary>A file the run cannot do without is missing or has no usable header. Everything else degrades row by row.</summary>
-public sealed class DatasetException : Exception
-{
-    public DatasetException(string message, Exception? inner = null) : base(message, inner) { }
-}
-
 /// <summary>
 /// Small helpers that give .NET values the semantics the audit relies on: ordinal string order, UTC timestamps parsed like ISO-8601 with an optional zone,
 /// text read with universal newlines, and the textual form of JSON values (so that "True" and "1" mean what they meant when the rules were written).
 /// </summary>
-public static class Py
+public static class Compat
 {
-    public static readonly StringComparer Ord = StringComparer.Ordinal;
     public const string TsFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'";
 
     // ------------------------------------------------------------------ time
@@ -359,7 +346,7 @@ public static class Py
     public static int Mod(long value, int modulus) => (int)(((value % modulus) + modulus) % modulus);
 }
 
-public static class PyJsonSorted
+public static class SortedJson
 {
     /// <summary>json.dumps(value, ensure_ascii=False, sort_keys=True) with the default separators (", " and ": ").</summary>
     public static string Dumps(object? v)
@@ -378,11 +365,11 @@ public static class PyJsonSorted
                 foreach (var key in dict.Keys.Cast<string>().OrderBy(k => k, StringComparer.Ordinal))
                 {
                     if (!first) sb.Append(", "); first = false;
-                    Py.DumpString(sb, key); sb.Append(": "); Write(sb, dict[key]);
+                    Compat.DumpString(sb, key); sb.Append(": "); Write(sb, dict[key]);
                 }
                 sb.Append('}'); break;
             case string or null or bool or long or int or double or System.Numerics.BigInteger:
-                sb.Append(Py.DumpsCompact(v)); break;
+                sb.Append(Compat.DumpsCompact(v)); break;
             case System.Collections.IEnumerable list:
                 sb.Append('['); bool f2 = true;
                 foreach (var item in list) { if (!f2) sb.Append(", "); f2 = false; Write(sb, item); }

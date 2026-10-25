@@ -46,7 +46,7 @@ public sealed class PolicyEngine
             if (!KnownActions.Contains(action))                                                       // an invented action must stop the run, not quietly turn cases into NOT_APPLICABLE
             {
                 var id = r.G("rule_id").Length > 0 ? r["rule_id"] : r["data_category"];
-                throw new DatasetException($"{Path.GetFileName(rulesCsv)}: {id}: unknown required_action {Py.StrRepr(r["required_action"])} for {r["data_category"]} (known: {string.Join(", ", KnownActions.OrderBy(a => a, StringComparer.Ordinal))})");
+                throw new DatasetException($"{Path.GetFileName(rulesCsv)}: {id}: unknown required_action {Compat.StrRepr(r["required_action"])} for {r["data_category"]} (known: {string.Join(", ", KnownActions.OrderBy(a => a, StringComparer.Ordinal))})");
             }
             Rules[r["data_category"]] = (action, r.G("condition"));
             RuleIds[r["data_category"]] = r.G("rule_id");
@@ -56,7 +56,7 @@ public sealed class PolicyEngine
     public string ActionFor(string category)
     {
         if (category == "DATA_FLOW") return "DISABLE_FLOW";
-        if (!Rules.TryGetValue(category, out var rule)) throw new KeyNotFoundException($"no rule for data category {Py.StrRepr(category)} in deletion_rules.csv");
+        if (!Rules.TryGetValue(category, out var rule)) throw new KeyNotFoundException($"no rule for data category {Compat.StrRepr(category)} in deletion_rules.csv");
         return rule.Action == "RETAIN" && rule.Condition.ToLowerInvariant().Contains("restore", StringComparison.Ordinal) ? "RETAIN_BLOCK_RESTORE" : rule.Action;
     }
 

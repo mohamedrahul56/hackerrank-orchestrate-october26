@@ -40,7 +40,6 @@ public sealed class EvidenceBase
 
 public static class Records
 {
-    public static readonly IReadOnlySet<string> NoIdents = new HashSet<string>(StringComparer.Ordinal);
 
     public static readonly Regex EmailRe = new(@"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", RegexOptions.CultureInvariant);
     public static readonly Regex UserRe = new(@"\buser_\d+\b", RegexOptions.CultureInvariant);
@@ -88,7 +87,7 @@ public static class Records
             case bool:
                 break;
             default:
-                yield return (key, Py.Str(obj));
+                yield return (key, Compat.Str(obj));
                 break;
         }
     }
@@ -113,7 +112,7 @@ public static class Records
     }
 
     // ----------------------------------------------------------------------------- state rules per record shape
-    public static string S(object? v) => v is null ? "" : Py.Str(v).Trim();
+    public static string S(object? v) => v is null ? "" : Compat.Str(v).Trim();
 
     private static object? Field(Dictionary<string, object?> rec, string key) => rec.TryGetValue(key, out var v) ? v : null;
 
@@ -147,15 +146,15 @@ public static class Records
     public static string ExportState(Dictionary<string, object?> rec)
     {
         object? avail = rec.TryGetValue("download_available", out var a) ? a : rec.TryGetValue("available", out var b) ? b : true;
-        var text = Py.Str(avail).ToLowerInvariant();
+        var text = Compat.Str(avail).ToLowerInvariant();
         return text is not ("false" or "0" or "no") ? "PRESENT" : "ABSENT";
     }
 
     public static string FlowState(Dictionary<string, object?> rec) =>
-        Py.Str(Field(rec, "enabled")).ToLowerInvariant() is "true" or "1" ? "ACTIVE" : "DISABLED";
+        Compat.Str(Field(rec, "enabled")).ToLowerInvariant() is "true" or "1" ? "ACTIVE" : "DISABLED";
 
     public static string BackupState(Dictionary<string, object?> rec) =>
-        Py.Str(Field(rec, "restore_allowed")).ToLowerInvariant() is "true" or "1" ? "RESTORABLE" : "BLOCKED";
+        Compat.Str(Field(rec, "restore_allowed")).ToLowerInvariant() is "true" or "1" ? "RESTORABLE" : "BLOCKED";
 
     public delegate string StateFn(Dictionary<string, object?> rec);
 

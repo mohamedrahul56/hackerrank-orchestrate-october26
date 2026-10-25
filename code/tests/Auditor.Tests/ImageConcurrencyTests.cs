@@ -21,7 +21,7 @@ public sealed class ImageClient : IModelClient
         this.barrier = barrier;
     }
 
-    public static Dictionary<string, object?> ReadingFor(int k) => (Dictionary<string, object?>)Py.ParseJson(
+    public static Dictionary<string, object?> ReadingFor(int k) => (Dictionary<string, object?>)Compat.ParseJson(
         $"{{\"screen\": \"console {k}\", \"records\": [{{\"resource_id\": \"data_flow_{1000 + k}\", \"selected\": true, \"emails\": [], \"user_ids\": [], \"phones\": [], \"status_words\": [\"Healthy\", \"Continuous\"], \"shows_direct_identifiers\": false, \"aliases\": []}}]}}")!;
 
     public ModelResponse Create(ModelRequest request, TimeSpan timeout)
@@ -121,7 +121,7 @@ public class ConcurrentImageReadsTests : IDisposable
     public void UsageLogHasOneCompleteRowPerImage()
     {
         LoadEvidence(MakeLlm(new ImageClient(delayMs: Enumerable.Range(0, N).ToDictionary(k => k, _ => 10))), 4);
-        var rows = File.ReadAllLines(tmp.File("usage.jsonl")).Select(l => Py.AsDict(Py.ParseJson(l))).ToList();          // every line is whole JSON
+        var rows = File.ReadAllLines(tmp.File("usage.jsonl")).Select(l => Compat.AsDict(Compat.ParseJson(l))).ToList();          // every line is whole JSON
         Assert.Equal(Enumerable.Range(0, N).Select(k => $"shot_{k}.png").OrderBy(x => x, StringComparer.Ordinal), rows.Select(r => (string)r["file"]!).OrderBy(x => x, StringComparer.Ordinal));
         Assert.All(rows, r => { Assert.Equal(10L, r["input_tokens"]); Assert.False((bool)r["cache_hit"]!); });
     }
@@ -209,7 +209,7 @@ public class ConcurrentImageReadsTests : IDisposable
         var b = LoadEvidence(MakeLlm(client), 4);
         Assert.Equal(N, b.Obs.Count);
         Assert.Equal(2, client.CallsFor(5));
-        var rows = File.ReadAllLines(tmp.File("usage.jsonl")).Select(l => Py.AsDict(Py.ParseJson(l))).ToList();
+        var rows = File.ReadAllLines(tmp.File("usage.jsonl")).Select(l => Compat.AsDict(Compat.ParseJson(l))).ToList();
         Assert.Equal(2L, rows.First(r => (string)r["file"]! == "shot_5.png")["calls"]);
     }
 

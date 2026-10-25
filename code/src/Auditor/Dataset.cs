@@ -50,9 +50,9 @@ public sealed class Dataset
             if (cid.Length == 0) { bad.Add(new BadRow("", line, "empty case_id")); continue; }
             if (!seen.Add(cid)) { bad.Add(new BadRow(cid, line, "duplicate case_id (first row kept)")); continue; }
             order.Add(cid);
-            var requested = Py.TryTs(r.G("requested_at"));
-            var reported = Py.TryTs(r.G("reported_at"));
-            var audit = Py.TryTs(r.G("audit_at"));
+            var requested = Compat.TryTs(r.G("requested_at"));
+            var reported = Compat.TryTs(r.G("reported_at"));
+            var audit = Compat.TryTs(r.G("audit_at"));
             if (requested is null || reported is null || audit is null)
             {
                 var broken = new[] { ("requested_at", requested), ("reported_at", reported), ("audit_at", audit) }.Where(x => x.Item2 is null).Select(x => x.Item1);
@@ -90,7 +90,7 @@ public sealed class Dataset
             {
                 foreach (var r in Csv.ReadRows(Path.Combine(root, file)))
                 {
-                    var t = Py.TryTs(r.G(timeCol));
+                    var t = Compat.TryTs(r.G(timeCol));
                     if (r.G(idCol).Length > 0 && t is not null) table[r[idCol]] = t.Value;
                 }
             }

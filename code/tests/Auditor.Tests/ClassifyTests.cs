@@ -20,7 +20,7 @@ public class ClassifyTests
     {
         var rows = new List<(string, string)>();
         string? cur = null;
-        foreach (var line in Repo.Read("code/evaluation/request_sentences.md").Split('\n'))
+        foreach (var line in Repo.Read("code/tests/Auditor.Tests/Fixtures/request_sentences.md").Split('\n'))
         {
             if (line.StartsWith("## ", StringComparison.Ordinal)) cur = line[3..].Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
             var m = Regex.Match(line, @"^\| (\d+) \| (\d+) \| (.*?) \| (.*?) \|$");

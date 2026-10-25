@@ -64,7 +64,6 @@ public static class Classifier
     private static readonly Regex StatementHead = new(@"\bi(?:'m| am) (?:deleting|closing)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex Filler = new(@"^\s*(?:and then|and|then|also|after that|afterwards|finally|next|plus|so)\b[,\s]*", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
-    private const RegexOptions Ci = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
     private static readonly Regex SentenceSplit = new(@"(?<=[.!?。！？])\s+|\n+", RegexOptions.CultureInvariant);
     private static readonly Regex ClauseSplit = new(@",\s+(?=(?:but|so|and|however|although)\b)|;\s+|\s+(?:but|however|although)\s+", RegexOptions.CultureInvariant);
     private static readonly Regex Imperative = new(@"^\s*(?:delete|erase|remove|close|wipe|purge|cancel|stop|send|keep|leave|do not|don't|handle|clean|finish|disable|replace|correct|change|update|tell|give|provide|check|verify|inspect|audit|investigate|confirm|unsubscribe)\b", RegexOptions.CultureInvariant);
@@ -92,7 +91,7 @@ public static class Classifier
     private static bool Negated(string clause, Match m)
     {
         var before = clause[..m.Index];
-        var window = string.Join(" ", Py.Words(before).TakeLast(5));
+        var window = string.Join(" ", Compat.Words(before).TakeLast(5));
         if (NegBefore.IsMatch(window)) return true;
         if (NotAsking.IsMatch(clause)) return true;
         return NegAnywhereCjk.IsMatch(clause[(m.Index + m.Length)..]);
@@ -119,7 +118,7 @@ public static class Classifier
             if (Negated(c, noun)) return new Clause(c, "NEGATED", "deletion refused");
             if (AuditWords.IsMatch(low) && TheDeletion.IsMatch(low)) return new Clause(c, "AUDIT", "asks to audit/finish a deletion");
             if (PastContext.IsMatch(c) && !Init.IsMatch(c)) return new Clause(c, "CONTEXT", "narration");
-            if (Init.IsMatch(c) || !Py.IsAscii(c)) return new Clause(c, "DELETE", "requests deletion (noun form)");
+            if (Init.IsMatch(c) || !Compat.IsAscii(c)) return new Clause(c, "DELETE", "requests deletion (noun form)");
             return new Clause(c, "SUPPORT", "refers to deletion requirements/procedure");
         }
         if (m.Success)
@@ -132,7 +131,7 @@ public static class Classifier
             }
             if (hasMarketing && (Only.IsMatch(c) || !AccountProfilePersonal.IsMatch(low))) return new Clause(c, "NONDELETE", "removal limited to marketing communications");
             if (PastContext.IsMatch(c) && !RequestMark.IsMatch(c)) return new Clause(c, "CONTEXT", "past-tense narration");
-            if (StatementHead.IsMatch(c) || marked || !Py.IsAscii(c))
+            if (StatementHead.IsMatch(c) || marked || !Compat.IsAscii(c))
             {
                 if (VerifyWords.IsMatch(low) && !DeleteMyThe.IsMatch(low)) return new Clause(c, "AUDIT", "asks to check a deletion");
                 if (OtherObj.IsMatch(c) && !AccountObj.IsMatch(OtherObj.Replace(c, ""))) return new Clause(c, "CONTEXT", "allowance about a secondary object");

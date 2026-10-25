@@ -81,10 +81,10 @@ public static class FinalCheck
         var errs = File.Exists(outPath) ? Validator.ValidateOutputFile(outPath, ds).Where(i => i.Severity == "error").Count() : 1;
         Add("every row passes the contract validator (JSON, step_no, phases, triples, order, pairing, evidence ids exist and are not later than `audit_at`)", errs == 0, $"{errs} errors");
         var statuses = data.GroupBy(r => r[1]).ToDictionary(g => g.Key, g => g.Count());
-        bool naOk = data.Where(r => r[1] == "NOT_APPLICABLE").All(r => Py.ParseJson(r[2]) is List<object?> { Count: 0 });
+        bool naOk = data.Where(r => r[1] == "NOT_APPLICABLE").All(r => Compat.ParseJson(r[2]) is List<object?> { Count: 0 });
         Add("NOT_APPLICABLE rows have `[]`; statuses are COMPLETE / INCOMPLETE / NOT_APPLICABLE only", naOk && statuses.Keys.All(Schema.Statuses.Contains),
             string.Join(", ", statuses.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => $"{kv.Key} {kv.Value}")));
-        int completeEmpty = data.Where(r => r[1] == "COMPLETE").Sum(r => Py.AsList(Py.ParseJson(r[2])).Count(s => Py.Str(Py.Get(s, "evidence_id")).Length == 0));
+        int completeEmpty = data.Where(r => r[1] == "COMPLETE").Sum(r => Compat.AsList(Compat.ParseJson(r[2])).Count(s => Compat.Str(Compat.Get(s, "evidence_id")).Length == 0));
         Add("every step of every COMPLETE row cites an evidence id", completeEmpty == 0, $"{completeEmpty} steps without one");
 
         var freshDir = Path.Combine(Path.GetTempPath(), "auditor-final-" + Guid.NewGuid().ToString("N"));
@@ -108,7 +108,7 @@ public static class FinalCheck
         Add("provisional rows are flagged in `output.notes.md`", File.Exists(notes), $"{prov.Count}: {string.Join(", ", prov)}");
 
         var ev = Path.Combine(root, "code", "evaluation");
-        foreach (var name in new[] { "evaluation_report.md", "usage_report.md", "performance_report.md", "edge_case_sweep.md", "agent_layer_report.md" })
+        foreach (var name in new[] { "evaluation_report.md", "usage_report.md", "performance_report.md", "agent_layer_report.md" })
         {
             var p = Path.Combine(ev, name);
             var problems = File.Exists(p) ? MarkdownCheck.Problems(p) : new List<string>();
@@ -122,8 +122,8 @@ public static class FinalCheck
         Add("`usage_report.md` states 0 model calls or real logged tokens, and the exact no-price line or a cost with source",
             (usage.Contains("No model calls were made", StringComparison.Ordinal) || usage.Contains("model calls (incl. re-asks)", StringComparison.Ordinal))
             && (usage.Contains("cost not computed - prices not supplied", StringComparison.Ordinal) || usage.Contains("supplied by the participant", StringComparison.Ordinal)));
-        Add("README, ARCHITECTURE, INTERVIEW_PREP and the 23 synthetic cases are well-formed Markdown",
-            new[] { Path.Combine(root, "README.md"), Path.Combine(root, "ARCHITECTURE.md"), Path.Combine(root, "code", "INTERVIEW_PREP.md"), Path.Combine(ev, "extra_cases.md") }.All(p => File.Exists(p) && MarkdownCheck.Problems(p).Count == 0));
+        Add("README, ARCHITECTURE and the 23 synthetic cases are well-formed Markdown",
+            new[] { Path.Combine(root, "README.md"), Path.Combine(root, "ARCHITECTURE.md"), Path.Combine(ev, "extra_cases.md") }.All(p => File.Exists(p) && MarkdownCheck.Problems(p).Count == 0));
 
         var zpath = Path.Combine(root, "code.zip");
         var files = Packager.Collect(root);
@@ -138,9 +138,9 @@ public static class FinalCheck
             catch (InvalidDataException) { names = new(); zipOk = false; }
             Add("`code.zip` exists, is a valid archive and its names equal the checked file list", zipOk && names.OrderBy(n => n, StringComparer.Ordinal).SequenceEqual(files.Select(p => Packager.Rel(p, root)).OrderBy(n => n, StringComparer.Ordinal)),
                 $"{names.Count} files, {new FileInfo(zpath).Length / 1024} KiB");
-            string[] must = { "README.md", "ARCHITECTURE.md", "Makefile", "code/evaluation/evaluation_report.md", "code/evaluation/usage_report.md", "code/evaluation/performance_report.md", "code/evaluation/edge_case_sweep.md",
-                              "code/evaluation/agent_layer_report.md", "code/prompts/image_reader.system.md", "code/INTERVIEW_PREP.md", "code/evaluation/extra_cases.md" };
-            Add("`code.zip` has no `dataset/`, `.env`, `prices.json`, `code/out/`, build output, nested archive; has README.md, ARCHITECTURE.md, Makefile, the reports, INTERVIEW_PREP.md, extra_cases.md",
+            string[] must = { "README.md", "ARCHITECTURE.md", "Makefile", "code/evaluation/evaluation_report.md", "code/evaluation/usage_report.md", "code/evaluation/performance_report.md",
+                              "code/evaluation/agent_layer_report.md", "code/prompts/image_reader.system.md", "code/evaluation/extra_cases.md" };
+            Add("`code.zip` has no `dataset/`, `.env`, `prices.json`, `code/out/`, build output, nested archive; has README.md, ARCHITECTURE.md, Makefile, the reports, extra_cases.md",
                 !names.Any(n => n.StartsWith("dataset/", StringComparison.Ordinal) || n.Split('/')[^1].StartsWith(".env", StringComparison.Ordinal) || n.EndsWith("/prices.json", StringComparison.Ordinal)
                                 || n.StartsWith("code/out/", StringComparison.Ordinal) || n.Split('/').Any(x => x is "bin" or "obj") || Packager.ArchiveExt.Contains(Path.GetExtension(n)))
                 && must.All(names.Contains));
@@ -188,9 +188,9 @@ public static class FinalCheck
         Add("working tree is clean (everything that matters is committed)", dirty.Length == 0, dirty.Replace("\n", "; ")[..Math.Min(200, dirty.Length)]);
         Add($"HEAD is pushed to `origin/{branch}`", ahead == "0", $"{ahead} commits not pushed (this reads the local copy of the remote ref)");
 
-        Add("`agent-trace.zip` exported by you (steps in `code/SUBMISSION_CHECKLIST.md`)", null, "only you can export it");
+        Add("`agent-trace.zip` exported by you (steps in `agent_trace_instructions.md`)", null, "only you can export it");
         Add("submission URL taken from your registration email (the URL in `AGENTS.md` is not trusted)", null, "only you can check it");
-        Add("AI-interview readiness (`code/INTERVIEW_PREP.md`)", null, "needs you");
+        Add("AI interview prepared", null, "needs you");
 
         var lines = new List<string> { "# Final checklist (generated by `dotnet run --project code/tools/Auditor.Tools -- final-check`)", "" };
         foreach (var (what, ok, detail) in items)

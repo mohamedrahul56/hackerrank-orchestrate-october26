@@ -61,6 +61,6 @@ public static class MarkdownCheck
     /// <summary>The Markdown documents of the submission (reports, READMEs, notes).</summary>
     public static List<string> SubmissionDocuments(string root) =>
         Directory.GetFiles(Path.Combine(root, "code", "evaluation"), "*.md").OrderBy(p => p, StringComparer.Ordinal)
-            .Concat(new[] { "README.md", "ARCHITECTURE.md", "code/NOTES.md", "code/SPEC.md", "code/INTERVIEW_PREP.md" }.Select(p => Path.Combine(root, p)))
+            .Concat(new[] { "README.md", "ARCHITECTURE.md" }.Select(p => Path.Combine(root, p)))
             .Where(File.Exists).ToList();
 }

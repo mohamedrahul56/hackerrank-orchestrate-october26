@@ -1,4 +1,3 @@
-using Auditor.Evidence;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -69,10 +68,10 @@ public static class EvaluationReport
             runs.Add((code, File.ReadAllBytes(o)));
         }
         static Dictionary<string, (string Status, List<object?> Steps)> Load(string path) =>
-            Csv.ReadRows(path).ToDictionary(r => r.G("case_id"), r => (r.G("deletion_status"), Py.AsList(Py.ParseJson(r.G("steps_json")))), StringComparer.Ordinal);
+            Csv.ReadRows(path).ToDictionary(r => r.G("case_id"), r => (r.G("deletion_status"), Compat.AsList(Compat.ParseJson(r.G("steps_json")))), StringComparer.Ordinal);
         var baseRows = Load(outCsv); var now = Load(o1);
         var notes = File.ReadAllText(Path.ChangeExtension(o1, ".notes.md"));
-        var changed = mainIds.Where(c => Py.DumpsCompact(new List<object?> { baseRows[c].Status, baseRows[c].Steps }) != Py.DumpsCompact(new List<object?> { now[c].Status, now[c].Steps })).ToList();
+        var changed = mainIds.Where(c => Compat.DumpsCompact(new List<object?> { baseRows[c].Status, baseRows[c].Steps }) != Compat.DumpsCompact(new List<object?> { now[c].Status, now[c].Steps })).ToList();
         var samePro = prov.Where(c => !changed.Contains(c)).ToList();
         var L = new List<string>
         {
@@ -84,7 +83,7 @@ public static class EvaluationReport
         };
         foreach (var c in changed)
         {
-            static List<(string, string, string)> Key(List<object?> steps) => steps.Select(x => (Py.Str(Py.Get(x, "operation")), Py.Str(Py.Get(x, "resource_id")), Py.Str(Py.Get(x, "evidence_id")))).ToList();
+            static List<(string, string, string)> Key(List<object?> steps) => steps.Select(x => (Compat.Str(Compat.Get(x, "operation")), Compat.Str(Compat.Get(x, "resource_id")), Compat.Str(Compat.Get(x, "evidence_id")))).ToList();
             var a = Key(baseRows[c].Steps); var b = Key(now[c].Steps);
             string Fmt(IEnumerable<(string, string, string)> xs) { var s = string.Join(", ", xs.Select(t => $"{t.Item1} `{t.Item2}` ({(t.Item3.Length > 0 ? t.Item3 : "no evidence")})")); return s.Length > 0 ? s : "nothing"; }
             L.Add($"    * `{c}` {baseRows[c].Status} -> {now[c].Status}: removed {Fmt(a.Where(k => !b.Contains(k)))}; added {Fmt(b.Where(k => !a.Contains(k)))}.");
@@ -238,12 +237,9 @@ public static class EvaluationReport
         L.AddRange(new[]
         {
             "", "The gate rule that can change a state, G10 (a model reading cannot lower the severity of a state that deterministic evidence supports), is applied only to model-sourced observations, so the default path is byte-identical by construction.", "",
-            "### 5.6 Edge-case sweep", "",
-            "The edge-case sweep runs the real pipeline on small synthetic datasets that each isolate one awkward input (empty or missing fields, bad timestamps, duplicate or unknown ids, e-mail spelling, old e-mails, several requests per user, events after audit_at, failed-but-claimed-success operations, resources without an identifier, shared reported_at, retained records with extra identifiers, expired legal holds, corrupt or missing evidence, corrupt PNGs, prompt injection). Every scenario states its expected behaviour in words before the run; the full table (case, expected, observed, verdict) is `code/evaluation/edge_case_sweep.md`. The regression tests for the defects it found are in `EdgeRegressionsTests.cs`.", "",
+            "### 5.6 Edge-case regressions", "",
+            "Awkward inputs (empty or missing fields, bad timestamps, duplicate or unknown ids, corrupt evidence, corrupt PNGs, prompt injection) are exercised by `EdgeRegressionsTests`, `RobustnessTests` and `ExtraCasesTests`. An earlier sweep of 118 hand-written scenarios, run on the original Python implementation, found **8 defects**, all fixed; each has a regression test in `EdgeRegressionsTests.cs` (row 44 of the change log).", "",
         });
-        var sweepFile = Path.Combine(outDir, "edge_case_sweep.md");
-        L.AddRange(File.Exists(sweepFile) ? SweepSummary(sweepFile) : new List<string> { "(edge_case_sweep.md has not been generated yet)" });
-        L.AddRange(new[] { "", "The first run of the sweep on the code before any fix found **8 defects**, all fixed with regression tests; see section 7 and the defects table at the end of `edge_case_sweep.md`.", "" });
 
         // ------------------------------------------------------------------ 6. provisional rows
         L.AddRange(new[]
@@ -267,7 +263,7 @@ public static class EvaluationReport
             "* **'No later-evidence' ablation leaked later evidence** through late-linked accounts, and those links were not in the log; fixed and logged (row 19).",
             "* **A wrong NOT_APPLICABLE placeholder** for deletion requests whose only evidence is a screenshot; replaced by provisional INCOMPLETE rows (row 23).",
             "* **An instruction-like status word extracted from an image could have flipped a state**; model-written fields are now sanitised (row 28).",
-            "* **The edge-case sweep (section 5.6) found 8 defects** on its first run: a time without a zone was read in the machine's time zone; an unreadable `retained_until` dropped a legal-hold record; a manifest path could leave the dataset folder; a request text above 128 KiB ended the whole run; a resource id taken from evidence was copied into a step verbatim; a missing or malformed rules file was a traceback and an unknown rule action silently turned cases into NOT_APPLICABLE (row 44).",
+            "* **An edge-case sweep (section 5.6) found 8 defects** on its first run: a time without a zone was read in the machine's time zone; an unreadable `retained_until` dropped a legal-hold record; a manifest path could leave the dataset folder; a request text above 128 KiB ended the whole run; a resource id taken from evidence was copied into a step verbatim; a missing or malformed rules file was a traceback and an unknown rule action silently turned cases into NOT_APPLICABLE (row 44).",
             "* **The port found two behaviours the Python tests had not pinned**: a truncated PNG decoded only in part (SkiaSharp) instead of failing, so `zoom_region` now treats an incomplete decode as a tool error; and the default location of the local price file had to be resolved from the repository, not from the binaries (row 53).", "",
         });
         L.AddRange(TableFrom(Path.Combine(outDir, "CHANGELOG.md"), "| #"));
@@ -330,17 +326,6 @@ public static class EvaluationReport
             "* an independent test set: the 32 labels were all seen in Phase 0.", "",
         });
         return string.Join("\n", L) + "\n";
-    }
-
-    private static List<string> SweepSummary(string sweepFile)
-    {
-        var text = File.ReadAllText(sweepFile);
-        var summary = Regex.Match(text, @"^\| area \| scenarios .*?(?=\n\n)", RegexOptions.Multiline | RegexOptions.Singleline);
-        var totals = Regex.Match(text, @"^Totals: .*$", RegexOptions.Multiline);
-        var lines = new List<string>();
-        if (summary.Success) lines.AddRange(summary.Value.Split('\n'));
-        if (totals.Success) { lines.Add(""); lines.Add(totals.Value); }
-        return lines.Count > 0 ? lines : new List<string> { "(see edge_case_sweep.md)" };
     }
 
     public static int Run(string[] args, TextWriter stdout, TextWriter stderr)

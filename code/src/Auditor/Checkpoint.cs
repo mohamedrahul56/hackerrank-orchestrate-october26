@@ -52,7 +52,7 @@ public sealed class Checkpoint : IDisposable
     public static string ImageObservationDigest(CaseAuditor auditor)
     {
         var rows = auditor.Base.Obs.Where(o => o.Source.StartsWith("image:", StringComparison.Ordinal))
-                          .Select(o => $"({Py.StrRepr(o.FileId)}, {Py.StrRepr(o.Resource)}, {Py.StrRepr(o.Category)}, {Py.StrRepr(o.State)}, {Py.ListRepr(o.Idents.OrderBy(i => i, StringComparer.Ordinal))}, {Py.StrRepr(o.Source)})")
+                          .Select(o => $"({Compat.StrRepr(o.FileId)}, {Compat.StrRepr(o.Resource)}, {Compat.StrRepr(o.Category)}, {Compat.StrRepr(o.State)}, {Compat.ListRepr(o.Idents.OrderBy(i => i, StringComparer.Ordinal))}, {Compat.StrRepr(o.Source)})")
                           .OrderBy(x => x, StringComparer.Ordinal).ToList();
         return rows.Count == 0 ? "" : Sha256Hex(string.Join("\n", rows));
     }
@@ -73,17 +73,17 @@ public sealed class Checkpoint : IDisposable
     private static string Line(Dictionary<string, object?> payload)
     {
         // key order is kept as it is (no sorting): steps_json is written to output.csv in this order, and a resumed file must be byte-identical
-        var body = Py.DumpsCompact(payload);
-        return Py.DumpsCompact(new Dictionary<string, object?> { ["sha"] = Sha256Hex(body), ["d"] = payload }) + "\n";
+        var body = Compat.DumpsCompact(payload);
+        return Compat.DumpsCompact(new Dictionary<string, object?> { ["sha"] = Sha256Hex(body), ["d"] = payload }) + "\n";
     }
 
     private static Dictionary<string, object?>? ParseLine(string text)
     {
         try
         {
-            var obj = Py.AsDict(Py.ParseJson(text));
-            var d = Py.AsDict(obj["d"]);
-            return Sha256Hex(Py.DumpsCompact(d)) == (obj["sha"] as string) ? d : null;
+            var obj = Compat.AsDict(Compat.ParseJson(text));
+            var d = Compat.AsDict(obj["d"]);
+            return Sha256Hex(Compat.DumpsCompact(d)) == (obj["sha"] as string) ? d : null;
         }
         catch (Exception e) when (e is DataException or KeyNotFoundException) { return null; }
     }
@@ -96,14 +96,14 @@ public sealed class Checkpoint : IDisposable
 
     public static CaseResult FromPayload(Dictionary<string, object?> d)
     {
-        var steps = Py.AsList(d["steps"]).Select(x =>
+        var steps = Compat.AsList(d["steps"]).Select(x =>
         {
-            var s = Py.AsDict(x);
+            var s = Compat.AsDict(x);
             return new Step((int)System.Convert.ToInt64(s["step_no"], System.Globalization.CultureInfo.InvariantCulture), (string)s["phase"]!, (string)s["system_id"]!, (string)s["resource_id"]!,
                             (string)s["operation"]!, (string)s["state"]!, (string)s["evidence_id"]!);
         }).ToList();
-        var later = Py.AsList(d["later_links"]).Select(x => { var l = Py.AsList(x); return ((string)l[0]!, (string)l[1]!, (string)l[2]!); }).ToList();
-        return new CaseResult((string)d["case_id"]!, (string)d["status"]!, steps, Py.AsList(d["notes"]).Select(n => (string)n!).ToList(), later, Py.Truthy(d["provisional"]));
+        var later = Compat.AsList(d["later_links"]).Select(x => { var l = Compat.AsList(x); return ((string)l[0]!, (string)l[1]!, (string)l[2]!); }).ToList();
+        return new CaseResult((string)d["case_id"]!, (string)d["status"]!, steps, Compat.AsList(d["notes"]).Select(n => (string)n!).ToList(), later, Compat.Truthy(d["provisional"]));
     }
 
     /// <summary>Opened with the current run key.</summary>
@@ -122,7 +122,7 @@ public sealed class Checkpoint : IDisposable
         var text = new UTF8Encoding(false, false).GetString(File.ReadAllBytes(path));
         var lines = text.Split('\n');
         var header = lines.Length > 0 && lines[0].Length > 0 ? ParseLine(lines[0]) : null;
-        if (header is null || !Equals(header.GetValueOrDefault("kind"), "header") || !Py.EqualsNumber(header.GetValueOrDefault("format"), Format)) { How = "discarded: header unreadable"; return; }
+        if (header is null || !Equals(header.GetValueOrDefault("kind"), "header") || !Compat.EqualsNumber(header.GetValueOrDefault("format"), Format)) { How = "discarded: header unreadable"; return; }
         if (!Equals(header.GetValueOrDefault("key"), key)) { How = "discarded: the checkpoint was made for other inputs, versions or settings"; return; }
         var valid = new List<string> { lines[0] };
         foreach (var ln in lines.Skip(1))

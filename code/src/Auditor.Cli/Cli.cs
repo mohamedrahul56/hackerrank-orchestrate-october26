@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using Auditor;
 using Auditor.Agent;
 using Auditor.Evidence;
 
@@ -160,7 +159,7 @@ public static class Cli
         catch (KeyNotFoundException)
         {
             var known = auditor.Requests.Keys.OrderBy(c => c.Length).ThenBy(c => c, StringComparer.Ordinal).ToList();
-            stderr.WriteLine($"error: no case {Py.StrRepr(o.Explain!)} in the request files (e.g. {string.Join(", ", known.Take(3))} ... {known[^1]})");
+            stderr.WriteLine($"error: no case {Compat.StrRepr(o.Explain!)} in the request files (e.g. {string.Join(", ", known.Take(3))} ... {known[^1]})");
             return 2;
         }
         return 0;
@@ -273,7 +272,7 @@ public static class Cli
         File.WriteAllText(Path.ChangeExtension(outPath, ".notes.md"), string.Join("\n", notes) + "\n", new UTF8Encoding(false));
 
         int fallbacks = results.Sum(x => x.Notes.Count(n => n.StartsWith("FALLBACK", StringComparison.Ordinal)));
-        stderr.WriteLine($"wrote {outPath} ({results.Count} rows); status counts {CountsRepr(counts)}; fallbacks {fallbacks}; provisional {provisional.Count} {Py.ListRepr(provisional.Select(x => x.CaseId))}; validator errors {errors.Count}");
+        stderr.WriteLine($"wrote {outPath} ({results.Count} rows); status counts {CountsRepr(counts)}; fallbacks {fallbacks}; provisional {provisional.Count} {Compat.ListRepr(provisional.Select(x => x.CaseId))}; validator errors {errors.Count}");
         foreach (var i in errors.Take(10)) stderr.WriteLine(i.ToString());
         ckpt.Close(remove: errors.Count == 0 && !o.KeepCheckpoint);                // on validator errors the file is kept for inspection
         return errors.Count > 0 ? 1 : 0;
@@ -286,7 +285,7 @@ public static class Cli
         return counts;
     }
 
-    private static string CountsRepr(Dictionary<string, int> counts) => "{" + string.Join(", ", counts.Select(kv => $"{Py.StrRepr(kv.Key)}: {kv.Value}")) + "}";
+    private static string CountsRepr(Dictionary<string, int> counts) => "{" + string.Join(", ", counts.Select(kv => $"{Compat.StrRepr(kv.Key)}: {kv.Value}")) + "}";
 
     private static Dictionary<string, object?> StampJson(VersionStamp s) => new()
     {

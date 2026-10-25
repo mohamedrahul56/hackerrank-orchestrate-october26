@@ -128,7 +128,7 @@ public static class Csv
         var header = table.Count > 0 ? table[0] : new List<string>();
         var missing = required.Where(c => !header.Contains(c, StringComparer.Ordinal)).ToList();
         if (missing.Count > 0)
-            throw new DatasetException($"{Path.GetFileName(path)}: missing column(s) [{string.Join(", ", missing.Select(m => Py.StrRepr(m)))}]");
+            throw new DatasetException($"{Path.GetFileName(path)}: missing column(s) [{string.Join(", ", missing.Select(m => Compat.StrRepr(m)))}]");
 
         var rows = new List<Dictionary<string, string>>();
         foreach (var raw in table.Skip(1))

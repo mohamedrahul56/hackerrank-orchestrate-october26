@@ -15,7 +15,7 @@ public sealed record Assignment(string? Resource = null, string How = "none", IR
 /// <summary>
 /// Find the resources that carry NO identifier in any evidence: deleted accounts (a 404 with no owner) and fully anonymized analytics records (every field null).
 /// The only link left is the deletion worker's activity timeline. For every deletion case the worker writes a burst of events around the case's <c>reported_at</c> (R): the account
-/// delete 45-75 minutes before R, the analytics anonymization about 29 minutes before R (offsets measured on the data, see NOTES.md). Cases that share the same R produce interleaved
+/// delete 45-75 minutes before R, the analytics anonymization about 29 minutes before R (offsets measured on the data, see evaluation/CHANGELOG.md). Cases that share the same R produce interleaved
 /// bursts, so a candidate is accepted only by ELIMINATION: remove accounts that are explicitly linked to someone else or already assigned, and accept a case's account only when exactly
 /// one candidate remains. Ambiguous groups stay unresolved - a guess with probability 1/k of being right is worse than omitting the step.
 /// </summary>
@@ -33,7 +33,7 @@ public static class Discover
         var output = new List<Event>();
         foreach (var r in rows)
         {
-            var t = Py.TryTs(r["event_time"]);
+            var t = Compat.TryTs(r["event_time"]);
             if (t is not null) output.Add(new Event(r["activity_id"], t.Value, r["event_type"], r.G("source_system"), r.G("target_system"), r.G("resource_id"), r.G("reported_result")));
         }
         return output;
@@ -61,7 +61,7 @@ public static class Discover
 
         private static bool UsableEvent(Event e) => !(e.EventType == "DELETE_RECORD" && e.Target == "account_service");
 
-        private static int Phase(Event e, DateTime tAccount) => Py.Mod((long)Math.Truncate((e.T - tAccount).TotalSeconds), 60);
+        private static int Phase(Event e, DateTime tAccount) => Compat.Mod((long)Math.Truncate((e.T - tAccount).TotalSeconds), 60);
 
         public void Learn(DateTime tAccount, IEnumerable<Event> events)
         {
@@ -84,7 +84,7 @@ public static class Discover
                 if (!UsableEvent(e) || !tab.TryGetValue(KeyOf(e), out var cnt) || cnt.Total == 0) continue;
                 int off = Phase(e, tAccount);
                 int near = 0;
-                foreach (int d in new[] { -1, 0, 1 }) near += cnt.Counts[Py.Mod(off + d, 60)];
+                foreach (int d in new[] { -1, 0, 1 }) near += cnt.Counts[Compat.Mod(off + d, 60)];
                 double density = (near + Alpha) / (cnt.Total + Alpha * 60) / 3.0;
                 total += Math.Log(density * 60);
                 used++;

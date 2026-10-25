@@ -28,7 +28,7 @@ public sealed record PromptFile(string Name, string Version, string Text, string
     {
         var path = Path.Combine(directory ?? DefaultDirectory, name);
         string raw;
-        try { raw = Py.ReadText(path); }
+        try { raw = Compat.ReadText(path); }
         catch (Exception e) when (e is IOException or DataException) { throw new PromptException($"prompt file not found: {name}", e); }
         var m = Front.Match(raw);
         if (!m.Success) throw new PromptException($"{name}: the file must start with a front matter block '---', 'version: <label>', '---'");

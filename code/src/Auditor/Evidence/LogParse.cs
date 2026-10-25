@@ -64,10 +64,10 @@ public static class LogParse
         if (rest.StartsWith('{'))                                                    // 6 structured JSON
         {
             Dictionary<string, object?> raw;
-            try { raw = Py.ParseJson(rest) as Dictionary<string, object?> ?? throw new DataException("not an object"); }
+            try { raw = Compat.ParseJson(rest) as Dictionary<string, object?> ?? throw new DataException("not an object"); }
             catch (DataException) { return null; }
             f = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var (k, v) in raw) f[k] = v is null || Nulls.Contains(Py.Str(v).ToLowerInvariant()) ? "" : Py.Str(v);
+            foreach (var (k, v) in raw) f[k] = v is null || Nulls.Contains(Compat.Str(v).ToLowerInvariant()) ? "" : Compat.Str(v);
             ev.Service = f.TryGetValue("service", out var svc) ? svc : Get(f, "logger");
             ev.Trace = Get(f, "trace_id");
         }
@@ -121,7 +121,7 @@ public static class LogParse
     {
         var output = new List<LogEvent>();
         int i = 0;
-        foreach (var line in Py.SplitLines(text))
+        foreach (var line in Compat.SplitLines(text))
         {
             i++;
             var e = ParseLine(line, i);

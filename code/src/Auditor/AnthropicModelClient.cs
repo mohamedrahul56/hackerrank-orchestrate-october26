@@ -89,7 +89,7 @@ public sealed class AnthropicModelClient : IModelClient
         {
             if (block.TryPickText(out var text)) blocks.Add(new Auditor.TextBlock(text.Text));
             else if (block.TryPickToolUse(out var use))
-                blocks.Add(new Auditor.ToolUseBlock(use.ID, use.Name, use.Input.ToDictionary(kv => kv.Key, kv => Py.ParseJson(kv.Value.GetRawText()), StringComparer.Ordinal)));
+                blocks.Add(new Auditor.ToolUseBlock(use.ID, use.Name, use.Input.ToDictionary(kv => kv.Key, kv => Compat.ParseJson(kv.Value.GetRawText()), StringComparer.Ordinal)));
         }
         return new ModelResponse(m.StopReason?.Raw() ?? "", blocks, new ModelUsage(m.Usage.InputTokens, m.Usage.OutputTokens, m.Usage.CacheReadInputTokens ?? 0));
     }

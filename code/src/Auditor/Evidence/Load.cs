@@ -20,7 +20,7 @@ public static class Load
         var output = new List<ManifestRow>();
         foreach (var r in rows)
         {
-            var t = Py.TryTs(r["captured_at"]);
+            var t = Compat.TryTs(r["captured_at"]);
             if (t is not null && r["file_id"].Trim().Length > 0) output.Add(new ManifestRow(r["file_id"], r["file_path"], r.G("origin"), t.Value));
         }
         return output;
@@ -62,7 +62,7 @@ public static class Load
         foreach (var r in manifest)
         {
             if (InsideRoot(root, r.FilePath)) safe.Add(r);
-            else b.Warnings.Add($"{r.FileId}: manifest path {Py.StrRepr(r.FilePath.Length > 60 ? r.FilePath[..60] : r.FilePath)} points outside the dataset folder; not read");
+            else b.Warnings.Add($"{r.FileId}: manifest path {Compat.StrRepr(r.FilePath.Length > 60 ? r.FilePath[..60] : r.FilePath)} points outside the dataset folder; not read");
         }
         bool reader = includeImages && imageReader is not null;
         var routes = safe.Select(r => (Route: Router.RouteFile(r.FileId, Path.Combine(root, r.FilePath), reader), r.T)).ToList();
@@ -90,7 +90,7 @@ public static class Load
         {
             b.Obs = b.Obs.Where(o => Schema.ValidResourceId(o.Resource)).ToList();
             var first = odd[0].Resource;
-            b.Warnings.Add($"{odd.Count} observation(s) dropped: resource id is not of the form <name>_<number> (first: {odd[0].FileId} {Py.StrRepr(first.Length > 40 ? first[..40] : first)})");
+            b.Warnings.Add($"{odd.Count} observation(s) dropped: resource id is not of the form <name>_<number> (first: {odd[0].FileId} {Compat.StrRepr(first.Length > 40 ? first[..40] : first)})");
         }
         return b;
     }
@@ -113,11 +113,11 @@ public static class Load
             catch (DatasetException) { activity = new(); }
             foreach (var r in activity)
             {
-                if (r["event_type"] != "LINK_RESOURCE_IDENTITY" || Py.TryTs(r["event_time"]) is null) continue;
+                if (r["event_type"] != "LINK_RESOURCE_IDENTITY" || Compat.TryTs(r["event_time"]) is null) continue;
                 var d = r.G("details");
                 var m = LinkedRe.Match(d);
                 var alias = m.Success ? m.Groups[2].Value : "";
-                rows.Add(new CatalogRow(r["activity_id"], Py.ParseTs(r["event_time"]), r.G("resource_id"), r.G("target_system"), alias,
+                rows.Add(new CatalogRow(r["activity_id"], Compat.ParseTs(r["event_time"]), r.G("resource_id"), r.G("target_system"), alias,
                                         Records.IdentsFrom(new[] { ("d", d) }), d.Contains("belongs only to", StringComparison.Ordinal)));
             }
             CatalogCache[stamp] = rows;

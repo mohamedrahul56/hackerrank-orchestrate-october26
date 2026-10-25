@@ -83,8 +83,8 @@ public static class PerformanceReport
             var o = p.StandardOutput.ReadToEndAsync(); var e = p.StandardError.ReadToEndAsync();
             p.WaitForExit();
             if (p.ExitCode != 0) throw new InvalidOperationException($"perf-run x{repeat} failed: {e.Result}");
-            var d = Py.AsDict(Py.ParseJson(o.Result.Trim().Split('\n')[^1]));
-            all.Add((D(d["total_s"]), D(d["peak_rss_mb"]), (string)d["output_sha256"]!, (int)D(d["cases"]), Py.AsDict(d["stages"]).ToDictionary(kv => kv.Key, kv => D(kv.Value))));
+            var d = Compat.AsDict(Compat.ParseJson(o.Result.Trim().Split('\n')[^1]));
+            all.Add((D(d["total_s"]), D(d["peak_rss_mb"]), (string)d["output_sha256"]!, (int)D(d["cases"]), Compat.AsDict(d["stages"]).ToDictionary(kv => kv.Key, kv => D(kv.Value))));
         }
         if (all.Select(a => a.Sha).Distinct().Count() != 1) throw new InvalidOperationException($"x{repeat}: the runs produced different output files");
         var sorted = all.OrderBy(a => a.Total).ToList();
@@ -178,7 +178,7 @@ public static class PerformanceReport
             int repeat = int.Parse(AgentProofs.Option(args, "--repeat") ?? "1", CultureInfo.InvariantCulture);
             var tmp = Directory.CreateTempSubdirectory("perf_one_").FullName;
             var ds = repeat > 1 ? ScaledDataset(dataset, Path.Combine(tmp, "ds"), repeat) : dataset;
-            stdout.WriteLine(Py.DumpsCompact(OneRun(ds)));
+            stdout.WriteLine(Compat.DumpsCompact(OneRun(ds)));
             try { Directory.Delete(tmp, true); } catch (IOException) { }
             return 0;
         }

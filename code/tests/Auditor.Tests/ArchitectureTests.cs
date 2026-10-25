@@ -1,10 +1,9 @@
 using System.Text.RegularExpressions;
-using Auditor.Tools;
 
 namespace Auditor.Tests;
 
 /// <summary>ARCHITECTURE.md must stay true: its performance table is the generated report's, and the modules and tests it names exist.</summary>
-public class ArchitectureDocTests
+public class ArchitectureTests
 {
     private static string Doc => Repo.Read("ARCHITECTURE.md");
     private static string Report => Repo.Read("code/evaluation/performance_report.md");

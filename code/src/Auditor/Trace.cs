@@ -18,7 +18,6 @@ public sealed class Trace
     public Dictionary<(string Phase, string Operation, string System, string Resource), string> StepWhy { get; } = new();
     /// <summary>resource -> ResourceState actually used</summary>
     public Dictionary<string, ResourceState> States { get; set; } = new(StringComparer.Ordinal);
-    public string StatusReason { get; set; } = "";
 
     public Step Why(Step step, string text)
     {

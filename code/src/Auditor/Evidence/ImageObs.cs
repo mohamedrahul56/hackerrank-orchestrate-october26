@@ -117,16 +117,16 @@ public static class ImageObs
     /// </summary>
     public static ReadingRecord Sanitize(object? raw)
     {
-        var rec = Py.AsDict(raw);
-        var words = Strings(Py.Get(rec, "status_words")).Select(w => w.Trim()).ToList();
-        var rid = Py.Get(rec, "resource_id");
+        var rec = Compat.AsDict(raw);
+        var words = Strings(Compat.Get(rec, "status_words")).Select(w => w.Trim()).ToList();
+        var rid = Compat.Get(rec, "resource_id");
         return new ReadingRecord(
             rid is string s ? s : "",
-            Py.Truthy(Py.Req(rec, "selected")),
-            Strings(Py.Get(rec, "emails")), Strings(Py.Get(rec, "user_ids")), Strings(Py.Get(rec, "phones")),
-            words.Where(w => ShortWord.IsMatch(w) && !w.Contains('\n', StringComparison.Ordinal) && Py.Words(w).Length <= 3).ToList(),
-            Py.Truthy(Py.Get(rec, "shows_direct_identifiers")),
-            Strings(Py.Get(rec, "aliases")));
+            Compat.Truthy(Compat.Req(rec, "selected")),
+            Strings(Compat.Get(rec, "emails")), Strings(Compat.Get(rec, "user_ids")), Strings(Compat.Get(rec, "phones")),
+            words.Where(w => ShortWord.IsMatch(w) && !w.Contains('\n', StringComparison.Ordinal) && Compat.Words(w).Length <= 3).ToList(),
+            Compat.Truthy(Compat.Get(rec, "shows_direct_identifiers")),
+            Strings(Compat.Get(rec, "aliases")));
     }
 
     /// <summary>Validate a model reading and append Obs. Returns how many records were accepted.</summary>
@@ -136,7 +136,7 @@ public static class ImageObs
         foreach (var row in catalog)
             if (row.Alias.Length > 0) aliasToResource[row.Alias.ToLowerInvariant()] = row;
         int n = 0;
-        foreach (var raw in Py.AsList(Py.Req(reading, "records")).Take(MaxRecords))
+        foreach (var raw in Compat.AsList(Compat.Req(reading, "records")).Take(MaxRecords))
         {
             var rec = Sanitize(raw);
             var rid = rec.ResourceId.Trim();

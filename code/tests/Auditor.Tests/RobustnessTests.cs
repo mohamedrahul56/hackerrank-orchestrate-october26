@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace Auditor.Tests;
 
-/// <summary>Phase 4: one bad row, file, record, API answer or model-written string must never crash a run or change an unrelated case.</summary>
+/// <summary>One bad row, file, record, API answer or model-written string must never crash a run or change an unrelated case.</summary>
 public abstract class RobustnessBase : IDisposable
 {
     protected static readonly string[] Header = { "case_id", "email", "requested_at", "reported_status", "reported_at", "audit_at", "request_text" };
@@ -30,7 +30,7 @@ public abstract class RobustnessBase : IDisposable
     }
 
     protected Dictionary<string, (string Status, List<object?> Steps)> ReadOut() =>
-        Csv.ReadRows(Out).ToDictionary(r => r.G("case_id"), r => (r.G("deletion_status"), Py.AsList(Py.ParseJson(r.G("steps_json")))));
+        Csv.ReadRows(Out).ToDictionary(r => r.G("case_id"), r => (r.G("deletion_status"), Compat.AsList(Compat.ParseJson(r.G("steps_json")))));
 
     protected void Requests(IEnumerable<string[]> rows) =>
         File.WriteAllText(Path.Combine(Root, "deletion_requests.csv"), string.Concat(new[] { Csv.FormatRow(Header) }.Concat(rows.Select(r => Csv.FormatRow(r)))), new UTF8Encoding(false));
@@ -160,7 +160,7 @@ public class BadEvidenceTests : RobustnessBase
         AddFile("mixed.json", Encoding.UTF8.GetBytes(doc));
         var (status, steps) = RunCase();
         Assert.Equal("INCOMPLETE", status);
-        var ids = steps.Select(s => Py.Str(Py.Get(s, "resource_id"))).ToHashSet();
+        var ids = steps.Select(s => Compat.Str(Compat.Get(s, "resource_id"))).ToHashSet();
         Assert.Contains("cache_778", ids);
         Assert.DoesNotContain("cache_777", ids);
     }
@@ -298,7 +298,7 @@ public class ModelFailureTests : IDisposable
             },
         };
         var b = new EvidenceBase();
-        var n = ImageObs.ObservationsFromReading(b, "evidence_91", Py.ParseTs("2026-08-10T12:00:00Z"), reading, new List<CatalogRow>());
+        var n = ImageObs.ObservationsFromReading(b, "evidence_91", Compat.ParseTs("2026-08-10T12:00:00Z"), reading, new List<CatalogRow>());
         Assert.Equal(2, n);                                                                  // the injected resource_id is not a record
         var flow = b.Obs.First(o => o.Resource == "data_flow_1121");
         Assert.Equal("ACTIVE", flow.State);                                                  // the instruction-like status words were dropped
@@ -316,7 +316,7 @@ public class ModelFailureTests : IDisposable
             ["status_words"] = Enumerable.Repeat((object?)"Live", 5000).ToList(), ["shows_direct_identifiers"] = false, ["aliases"] = new List<object?>(),
         };
         var b = new EvidenceBase();
-        var n = ImageObs.ObservationsFromReading(b, "evidence_91", Py.ParseTs("2026-08-10T12:00:00Z"), new Dictionary<string, object?> { ["screen"] = "x", ["records"] = Enumerable.Repeat((object?)rec, 5000).ToList() }, new List<CatalogRow>());
+        var n = ImageObs.ObservationsFromReading(b, "evidence_91", Compat.ParseTs("2026-08-10T12:00:00Z"), new Dictionary<string, object?> { ["screen"] = "x", ["records"] = Enumerable.Repeat((object?)rec, 5000).ToList() }, new List<CatalogRow>());
         Assert.Equal(ImageObs.MaxRecords, n);
     }
 
@@ -503,7 +503,7 @@ public class ImagePathVarianceTests : IDisposable
         Assert.Equal(answers[0], answers[1]);
         Assert.Equal(answers[0], answers[2]);
         Assert.Equal(("INCOMPLETE", false), (answers[0].Item1, answers[0].Item2));        // a real reading replaces the provisional row
-        var rows = File.ReadAllLines(dir.File("u.jsonl")).Where(l => l.Length > 0).Select(l => Py.AsDict(Py.ParseJson(l))).ToList();
+        var rows = File.ReadAllLines(dir.File("u.jsonl")).Where(l => l.Length > 0).Select(l => Compat.AsDict(Compat.ParseJson(l))).ToList();
         Assert.Equal(new[] { false, true, false }, rows.Select(r => (bool)r["cache_hit"]!));
     }
 }
@@ -518,9 +518,9 @@ public class RobustnessRealDataTests
         Assert.Equal(0, Run.Cli("--out", outPath, "--images", "off").Code);
         Assert.DoesNotContain(Validator.ValidateOutputFile(outPath, Dataset.Load(Repo.Dataset)), i => i.Severity == "error");
         var rows = Csv.ReadRows(outPath);
-        var complete = rows.Where(r => r.G("deletion_status") == "COMPLETE").SelectMany(r => Py.AsList(Py.ParseJson(r.G("steps_json"))).Select(s => (Id: r.G("case_id"), Step: s))).ToList();
+        var complete = rows.Where(r => r.G("deletion_status") == "COMPLETE").SelectMany(r => Compat.AsList(Compat.ParseJson(r.G("steps_json"))).Select(s => (Id: r.G("case_id"), Step: s))).ToList();
         Assert.True(complete.Count > 400);
-        Assert.DoesNotContain(complete, x => Py.Str(Py.Get(x.Step, "evidence_id")).Length == 0);
+        Assert.DoesNotContain(complete, x => Compat.Str(Compat.Get(x.Step, "evidence_id")).Length == 0);
     }
 
     [DatasetFact]

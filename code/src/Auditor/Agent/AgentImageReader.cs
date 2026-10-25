@@ -191,7 +191,7 @@ public sealed class AgentImageReader : IImageReader
                     }
                     return args;
                 }
-                var sig = tu.Name + PyJsonSorted.Dumps(args);
+                var sig = tu.Name + SortedJson.Dumps(args);
                 if (seen.TryGetValue(sig, out var earlier))
                 {
                     repeats++;
@@ -200,7 +200,7 @@ public sealed class AgentImageReader : IImageReader
                     continue;
                 }
                 if (tu.Name == "zoom_region" && zoomOn) results.Add(Zoom(tu, args, path, trace, seen, sig));
-                else results.Add(Err(tu, $"unknown tool {Py.StrRepr(Cut(tu.Name, 40))}; the tools are zoom_region and submit_reading"));
+                else results.Add(Err(tu, $"unknown tool {Compat.StrRepr(Cut(tu.Name, 40))}; the tools are zoom_region and submit_reading"));
             }
             messages.Add(new ChatMessage("user", results));
         }

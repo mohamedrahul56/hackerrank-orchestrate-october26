@@ -1,13 +1,12 @@
-using Auditor.Tools;
 
 namespace Auditor.Tests;
 
 /// <summary>The submission's reports must render fully as Markdown (the code judge reads .md only): balanced fences, well-formed tables, no raw debug text.</summary>
-public class ReportsRenderAsMarkdownTests
+public class ReportsMarkdownTests
 {
     private static readonly string[] Required =
     {
-        "code/evaluation/evaluation_report.md", "code/evaluation/usage_report.md", "README.md", "code/INTERVIEW_PREP.md", "code/evaluation/extra_cases.md",
+        "code/evaluation/evaluation_report.md", "code/evaluation/usage_report.md", "README.md", "code/evaluation/extra_cases.md",
     };
 
     [Fact]

@@ -71,7 +71,7 @@ public sealed class Linker
         {
             if (!Links.TryGetValue((resource, u), out var l)) continue;
             var c = l[0];
-            if (best is null || Py.CompareTuple(c.T, c.FileId, best.Value.T, best.Value.Id) < 0) best = (c.T, c.FileId);
+            if (best is null || Compat.CompareTuple(c.T, c.FileId, best.Value.T, best.Value.Id) < 0) best = (c.T, c.FileId);
         }
         return best;
     }

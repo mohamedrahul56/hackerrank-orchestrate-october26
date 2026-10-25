@@ -44,15 +44,15 @@ public sealed class FileReadings : IImageReader
         try
         {
             raw = File.ReadAllBytes(path);
-            doc = Py.ParseJson(new UTF8Encoding(false, true).GetString(raw));
+            doc = Compat.ParseJson(new UTF8Encoding(false, true).GetString(raw));
         }
         catch (FileNotFoundException e) { throw new ReadingsException($"readings file not found: {path}", e); }
         catch (Exception e) when (e is IOException or DecoderFallbackException or DataException) { throw new ReadingsException($"readings file {System.IO.Path.GetFileName(path)} is not valid JSON: {e.Message}", e); }
-        if (doc is not Dictionary<string, object?> d || !Py.EqualsNumber(Py.Get(d, "format"), 1) || Py.Get(d, "readings") is not Dictionary<string, object?> readings || Py.Get(d, "prompt_version") is not string version)
+        if (doc is not Dictionary<string, object?> d || !Compat.EqualsNumber(Compat.Get(d, "format"), 1) || Compat.Get(d, "readings") is not Dictionary<string, object?> readings || Compat.Get(d, "prompt_version") is not string version)
             throw new ReadingsException($"readings file {System.IO.Path.GetFileName(path)}: expected an object with format 1, prompt_version and readings");
         FileSha256 = Convert.ToHexString(SHA256.HashData(raw)).ToLowerInvariant();
         PromptVersion = version;
-        var src = Py.Str(d.TryGetValue("source", out var s) ? s : "");
+        var src = Compat.Str(d.TryGetValue("source", out var s) ? s : "");
         Source = src.Length > 300 ? src[..300] : src;
         Readings = readings;
     }
@@ -71,7 +71,7 @@ public sealed class FileReadings : IImageReader
         if (!Readings.TryGetValue(sha, out var entry) || entry is not Dictionary<string, object?> e || !e.ContainsKey("reading"))
             throw new LlmUnavailableException($"no reading for sha256 {sha[..12]} in {System.IO.Path.GetFileName(Path)}");
         if (PromptVersion != promptVersion)
-            throw new LlmUnavailableException($"{System.IO.Path.GetFileName(Path)} was made for prompt version {Py.StrRepr(PromptVersion)}, this run asks for {Py.StrRepr(promptVersion)}");
+            throw new LlmUnavailableException($"{System.IO.Path.GetFileName(Path)} was made for prompt version {Compat.StrRepr(PromptVersion)}, this run asks for {Compat.StrRepr(promptVersion)}");
         var reading = e["reading"];
         JsonSchemaCheck.Validate(reading, schema);                       // raises SchemaException, like a model answer that does not fit
         usage?.Add(new()
