@@ -6,7 +6,7 @@ namespace Auditor.Tests;
 /// </summary>
 public class InvariantsTests
 {
-    // AGENTS.md 6.3 / 6.4, typed out again on purpose (not read from Schema.cs): phase order, operation order inside a phase, state of each operation.
+    // problem statement, typed out again on purpose (not read from Schema.cs): phase order, operation order inside a phase, state of each operation.
     private static readonly string[] PhaseOrder = { "FINDING", "REMEDIATION", "VERIFICATION" };
     private static readonly (string Op, string Phase, string State)[] Operations =
     {
@@ -46,7 +46,7 @@ public class InvariantsTests
         if (status == "NOT_APPLICABLE") return steps.Count != 0 ? new() { "NOT_APPLICABLE row is not []" } : output;
         if (steps.Count == 0) return new() { $"{status} row has no steps" };
         for (int i = 0; i < steps.Count; i++)
-            if (!steps[i].Keys.ToHashSet().SetEquals(Fields)) return new() { $"step {i + 1}: fields {string.Join(",", steps[i].Keys)}" };      // key order is irrelevant (AGENTS.md 6.3)
+            if (!steps[i].Keys.ToHashSet().SetEquals(Fields)) return new() { $"step {i + 1}: fields {string.Join(",", steps[i].Keys)}" };      // key order is irrelevant (problem statement)
         if (!steps.Select(s => s.StepNo).SequenceEqual(Enumerable.Range(1, steps.Count).Select(x => (long)x))) output.Add("step_no is not 1..n in array order");
         var phases = steps.Select(s => Array.IndexOf(PhaseOrder, s.Phase)).ToList();
         if (!phases.SequenceEqual(phases.OrderBy(x => x))) output.Add("phases are not in order FINDING, REMEDIATION, VERIFICATION");

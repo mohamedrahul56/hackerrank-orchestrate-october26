@@ -15,7 +15,7 @@ public class HygieneTests
         var path = Path.Combine(Repo.Root, ".gitignore");
         if (!File.Exists(path)) return;                                    // .gitignore is not part of code.zip
         var lines = File.ReadAllText(path).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        foreach (var needed in new[] { ".env", "code.zip", "bin/", "obj/", "code/out/", "code/config/prices.json", "agent-trace/" }) Assert.Contains(needed, lines);
+        foreach (var needed in new[] { ".env", "code.zip", "bin/", "obj/", "code/out/", "code/config/prices.json" }) Assert.Contains(needed, lines);
     }
 
     [Fact]

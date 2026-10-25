@@ -23,7 +23,7 @@ help:
 	@echo "make bench            performance report at 1x ... 40x the requests (a few minutes) -> code/evaluation/performance_report.md"
 	@echo "make mutation         break 5 rules one at a time in a scratch copy; the tests must fail for each (minutes)"
 	@echo "make package          check every submission rule and write ./code.zip"
-	@echo "make check            build code.zip and run the final submission checklist (output.csv, log.txt, reports, zip contents)"
+	@echo "make check            build code.zip and run the final submission checklist (output.csv, reports, zip contents)"
 	@echo "make clean            remove build output, caches, checkpoints and generated scratch files (never output.csv or the reports)"
 
 setup:

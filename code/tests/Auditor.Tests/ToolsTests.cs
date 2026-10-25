@@ -168,7 +168,7 @@ public class PackagingRulesTests : IDisposable
         {
             ["dataset/deletion_requests.csv"] = "x", [".env"] = "K=1", ["code/.env.local"] = "K=1", ["code/out/pred.csv"] = "x", ["code/.cache/llm/a.json"] = "{}", ["code/config/prices.json"] = "{}",
             ["code/src/Auditor/bin/Release/Auditor.dll"] = "MZ", ["code/src/Auditor/obj/project.assets.json"] = "{}", ["code/tests/Auditor.Tests/TestResults/x.trx"] = "x",
-            ["agent-trace/claude-code/t.jsonl"] = "{}", ["log.txt"] = "log", ["output.csv"] = "a", ["AGENTS.md"] = "a",
+            ["output.csv"] = "a",
         });
         Assert.Equal(Base.Keys.OrderBy(k => k, StringComparer.Ordinal), names.OrderBy(k => k, StringComparer.Ordinal));
     }
@@ -193,14 +193,14 @@ public class PackagingRulesTests : IDisposable
     }
 
     [Fact]
-    public void SecretShapesAreDetectedEverywhereIncludingMarkdownAndTheLog()
+    public void SecretShapesAreDetectedEverywhereIncludingMarkdownAndThePriceFile()
     {
         Tree(Base.ToDictionary(kv => kv.Key, kv => kv.Value));
-        Tree(new() { ["code/notes.md"] = $"key: {FakeKey}", ["log.txt"] = "token ghp_" + new string('a', 36), ["code/config/prices.json"] = "{\"api_key\": \"" + new string('x', 24) + "\"}" });
+        Tree(new() { ["code/notes.md"] = $"key: {FakeKey}", ["code/token.md"] = "token ghp_" + new string('a', 36), ["code/config/prices.json"] = "{\"api_key\": \"" + new string('x', 24) + "\"}" });
         var (bad, _) = Packager.Check(Packager.Collect(tmp.Path), tmp.Path);
         var text = string.Join("\n", bad);
         Assert.Contains("code/notes.md: looks like a Anthropic key", text, StringComparison.Ordinal);
-        Assert.Contains("log.txt (not zipped, scanned anyway): looks like a GitHub token", text, StringComparison.Ordinal);
+        Assert.Contains("code/token.md: looks like a GitHub token", text, StringComparison.Ordinal);
         Assert.Contains("prices.json (not zipped, scanned anyway): looks like a key-like assignment", text, StringComparison.Ordinal);
     }
 
@@ -278,9 +278,9 @@ public class PackagingTheRealRepositoryTests : IDisposable
     }
 
     [Fact]
-    public void TheRepositoryLogAndPriceFileHoldNoSecret()
+    public void ThePriceFileHoldsNoSecret()
     {
-        foreach (var f in new[] { Path.Combine(Repo.Root, "log.txt"), Path.Combine(Repo.Code, "config", "prices.json") })
+        foreach (var f in new[] { Path.Combine(Repo.Code, "config", "prices.json") })
             if (File.Exists(f)) Assert.Empty(Packager.ScanText(Path.GetFileName(f), File.ReadAllText(f)));
     }
 

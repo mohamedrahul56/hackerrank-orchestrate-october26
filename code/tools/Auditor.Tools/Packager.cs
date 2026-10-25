@@ -5,9 +5,9 @@ using System.Text.RegularExpressions;
 namespace Auditor.Tools;
 
 /// <summary>
-/// Builds (or dry-runs) code.zip and checks every submission rule before anything is uploaded (AGENTS.md 6.9):
+/// Builds (or dry-runs) code.zip and checks every submission rule before anything is uploaded:
 /// no dataset/, no .env, no build output or caches, no code/out/, no agent traces, no nested archives, no local prices file;
-/// nothing that looks like a secret in anything zipped, in log.txt or in prices.json; no e-mail address of a dataset person in any zipped file;
+/// nothing that looks like a secret in anything zipped or in prices.json; no e-mail address of a dataset person in any zipped file;
 /// no file type the code judge ignores (.csv .tsv .json .jsonl .sql .log) except the price-file template; deterministic output (sorted entries, fixed timestamps).
 /// </summary>
 public static class Packager
@@ -16,8 +16,8 @@ public static class Packager
     public static readonly HashSet<string> JudgeIgnoredExt = new(StringComparer.OrdinalIgnoreCase) { ".csv", ".tsv", ".json", ".jsonl", ".sql", ".log" };
     public static readonly HashSet<string> AllowedIgnored = new(StringComparer.Ordinal) { "code/config/prices.example.json" };
     public static readonly HashSet<string> ExcludedDirs = new(StringComparer.Ordinal) { ".git", ".vs", ".idea", ".vscode", "bin", "obj", "TestResults", "node_modules", ".cache" };
-    public static readonly string[] ExcludedPrefixes = { "code/out/", "code/.cache/", "dataset/", "agent-trace", "output" };
-    public static readonly HashSet<string> ExcludedNames = new(StringComparer.Ordinal) { ".env", "prices.json", "log.txt", ".DS_Store" };
+    public static readonly string[] ExcludedPrefixes = { "code/out/", "code/.cache/", "dataset/", "output" };
+    public static readonly HashSet<string> ExcludedNames = new(StringComparer.Ordinal) { ".env", "prices.json", ".DS_Store" };
     public static readonly string[] Required =
     {
         "README.md", "ARCHITECTURE.md", "Makefile", "code/Auditor.sln", "code/src/Auditor/Auditor.csproj", "code/src/Auditor.Cli/Program.cs",
@@ -123,7 +123,7 @@ public static class Packager
             var leaked = EmailRe.Matches(text).Select(m => m.Value.ToLowerInvariant()).Where(emails.Contains).Distinct().OrderBy(x => x, StringComparer.Ordinal).ToList();
             if (leaked.Count > 0) bad.Add($"{n}: contains {leaked.Count} e-mail address(es) of dataset people, e.g. {leaked[0]}");
         }
-        foreach (var extra in new[] { Path.Combine(root, "log.txt"), Path.Combine(root, "code", "config", "prices.json") })
+        foreach (var extra in new[] { Path.Combine(root, "code", "config", "prices.json") })
             if (File.Exists(extra)) bad.AddRange(ScanText(Rel(extra, root) + " (not zipped, scanned anyway)", ReadText(extra) ?? ""));
         return (bad, notes);
     }

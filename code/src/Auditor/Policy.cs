@@ -11,7 +11,7 @@ public sealed record Verdict(string Category, string State, string Action, Treat
 /// with a known action works without code.
 /// Two rows need a note:
 ///   * BACKUP_ARCHIVE is RETAIN "when restore access can be blocked": the archive stays, but a restorable archive is a finding (REPORT_RESTORE_RISK -> BLOCK_RESTORE -> VERIFY_RESTORE_BLOCKED).
-///   * DATA_FLOW is not a data category in the CSV; the problem statement (section 6.5) requires disabling active flows, so it carries a fixed treatment below.
+///   * DATA_FLOW is not a data category in the CSV; the problem statement requires disabling active flows, so it carries a fixed treatment below.
 /// </summary>
 public sealed class PolicyEngine
 {
@@ -27,7 +27,7 @@ public sealed class PolicyEngine
         ["DISABLE_FLOW"] = new("REPORT_ACTIVE_DATA_FLOW", "DISABLE_DATA_FLOW", "VERIFY_DATA_FLOW_DISABLED", Set("ACTIVE"), Set("DISABLED")),
     };
 
-    /// <summary>the actions deletion_rules.csv may name (AGENTS.md section 1)</summary>
+    /// <summary>the actions deletion_rules.csv may name (problem statement)</summary>
     public static readonly IReadOnlySet<string> KnownActions = Set("DELETE", "REDACT", "ANONYMIZE", "RETAIN");
 
     // The account is the subject of the request: its absence is always verified even though other absent DELETE-type records (search entries, exports, ...) are only reported when they

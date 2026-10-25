@@ -14,7 +14,7 @@ public sealed record Step(int StepNo, string Phase, string SystemId, string Reso
 }
 
 /// <summary>
-/// The output contract (AGENTS.md section 6.3/6.4) as data, plus canonical ordering.
+/// The output contract (problem statement) as data, plus canonical ordering.
 /// Everything that needs to know "which operations exist, in which order, with which state" reads it from here, so the validator, the step generator and the scorer cannot disagree.
 /// </summary>
 public static class Schema

@@ -45,7 +45,7 @@ public static class MutationCheck
         }
         Copy(Path.Combine(root, "code"), Path.Combine(dst, "code"));
         Directory.CreateSymbolicLink(Path.Combine(dst, "dataset"), Path.Combine(root, "dataset"));
-        foreach (var name in new[] { "README.md", "output.csv", "AGENTS.md" })
+        foreach (var name in new[] { "README.md", "output.csv" })
             if (File.Exists(Path.Combine(root, name))) File.Copy(Path.Combine(root, name), Path.Combine(dst, name));
     }
 

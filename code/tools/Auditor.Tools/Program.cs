@@ -7,7 +7,7 @@ namespace Auditor.Tools;
 ///   dotnet run --project code/tools/Auditor.Tools -c Release -- score --pred output.csv [--gold dataset/sample_output.csv] [--split both] [--markdown report.md]
 ///   ... -- package [--dry-run] [--require-final]      builds code.zip after checking every submission rule
 ///   ... -- usage-report [--final]                     model usage report from the usage log of the last run
-///   ... -- final-check [--build-zip] [--expect-log-turns N]
+///   ... -- final-check [--build-zip]
 ///   ... -- show-readings [--text] [--only FILE_ID ...]   screenshots next to what the model read (needs ANTHROPIC_API_KEY in the environment)
 ///   ... -- extra-cases                                writes evaluation/extra_cases.md and extra_cases_results.md
 ///   ... -- evaluation-report                          writes evaluation/evaluation_report.md from live measurements

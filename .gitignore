@@ -16,6 +16,3 @@ code/out/
 *.usage.jsonl
 *.partial.jsonl
 
-# agent trace export (made by hand at submission time)
-agent-trace/
-agent-trace.zip

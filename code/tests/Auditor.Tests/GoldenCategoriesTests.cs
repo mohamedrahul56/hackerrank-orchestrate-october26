@@ -2,7 +2,7 @@ namespace Auditor.Tests;
 
 /// <summary>
 /// One golden test per policy category of deletion_rules.csv (plus the active data flow of spec 6.5, which is not a row of that file).
-/// Each golden answer is typed out by hand below (status + every step: phase, operation, system, resource, evidence_id) from the rule text and AGENTS.md 6.4,
+/// Each golden answer is typed out by hand below (status + every step: phase, operation, system, resource, evidence_id) from the rule text and problem statement,
 /// NOT computed by any code of this repository. The pipeline runs on a minimal dataset built for the case and must reproduce it exactly.
 /// Case n has the account `account_n01` (already deleted, so it is only verified), the retained audit record `audit_record_n02`, and the resource under test `&lt;prefix&gt;_n03`.
 /// </summary>
@@ -149,7 +149,7 @@ public class GoldenCategoriesTests
         return p;
     }
 
-    /// <summary>AGENTS.md 6.5: disable data flows and block unsafe restores BEFORE changing dependent records. One case with all three kinds of remediation.</summary>
+    /// <summary>problem statement: disable data flows and block unsafe restores BEFORE changing dependent records. One case with all three kinds of remediation.</summary>
     [Fact]
     public void FlowThenRestoreThenDelete()
     {

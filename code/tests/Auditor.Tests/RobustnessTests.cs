@@ -417,7 +417,7 @@ public class ProvisionalRowsTests : IDisposable
     }
 }
 
-/// <summary>AGENTS.md 6.3/6.6: every step of a COMPLETE row cites a file_id, activity_id or audit_id that exists and is not later than audit_at.</summary>
+/// <summary>problem statement: every step of a COMPLETE row cites a file_id, activity_id or audit_id that exists and is not later than audit_at.</summary>
 public class CompleteRowsMustCiteTests : RobustnessBase
 {
     private void WriteRows(string status, List<Step> steps) => OutputIo.Write(Out, new[] { new OutputIo.Row("XC-01", status, steps) });

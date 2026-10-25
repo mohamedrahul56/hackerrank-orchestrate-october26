@@ -2,7 +2,7 @@
 
 For every request in `dataset/deletion_requests.csv` the agent decides whether the person really asked for deletion, reconstructs the person's current and historical identifiers, finds
 every copy of their data at `audit_at`, applies `dataset/deletion_rules.csv`, and writes `output.csv` (`case_id,deletion_status,steps_json`): `COMPLETE`, `INCOMPLETE` (findings,
-an ordered remediation plan and verification checks) or `NOT_APPLICABLE` (`[]`). The challenge contract is in `problem_statement.md` / `AGENTS.md` (not repeated here).
+an ordered remediation plan and verification checks) or `NOT_APPLICABLE` (`[]`). The challenge contract is in `problem_statement.md` (not repeated here).
 
 **Principle: the model describes, deterministic code decides.** All statuses and steps come from code. The only model use is optional: turning the 11 PNG screenshots into schema-validated
 JSON facts. (No model reads request text: ambiguous request wording is `NOT_APPLICABLE`.) **The submitted `output.csv` was produced without any model call**
@@ -180,10 +180,9 @@ The 32 labels were all read in Phase 0 to infer the rules, so none of these numb
 ## Repository layout
 
 ```text
-AGENTS.md, CLAUDE.md, problem_statement.md, agent_trace_instructions.md   challenge instructions (not part of the solution)
+problem_statement.md                                                      the challenge statement
 README.md, ARCHITECTURE.md, Makefile                                      documentation and common tasks
 output.csv, output.notes.md                                               the submitted answers and the run notes (output.usage.jsonl is written by each run, git-ignored)
-log.txt                                                                   the chat transcript the challenge asks for
 dataset/                                                                  read-only input; never copied into code.zip
 code/
   Auditor.sln, Directory.Build.props, Directory.Packages.props            solution, shared compiler settings (warnings are errors), central NuGet versions

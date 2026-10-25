@@ -19,7 +19,7 @@ public static class Repo
     private static string FindRoot()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-            if (File.Exists(Path.Combine(dir.FullName, "AGENTS.md")) || Directory.Exists(Path.Combine(dir.FullName, "code", "src"))) return dir.FullName;
+            if (File.Exists(Path.Combine(dir.FullName, "code", "Auditor.sln"))) return dir.FullName;
         throw new InvalidOperationException("repository root not found");
     }
 
