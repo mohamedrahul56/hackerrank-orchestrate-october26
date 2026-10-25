@@ -245,7 +245,7 @@ public static class EvaluationReport
         L.AddRange(new[]
         {
             "## 6. Provisional rows", "",
-            $"{prov.Count} deletion requests have a screenshot as their only state evidence. Without a vision-model key each is answered `INCOMPLETE` with three steps (finding on the record the data catalog ties to the user inside the window, citing the in-window screenshot of the same system; remediation; verification). The state is assumed, not read. They are listed in `output.notes.md`, in `phase4_results.md` and below. **They are still provisional in the submitted `output.csv`**: the submitted run used neither a model nor a readings file. With the readings file all of them are computed normally and come out identical (section 5.4).", "",
+            $"{prov.Count} deletion requests have a screenshot as their only state evidence. Without a vision-model key each is answered `INCOMPLETE` with three steps (finding on the record the data catalog ties to the user inside the window, citing the in-window screenshot of the same system; remediation; verification). The state is assumed, not read. They are listed in `output.notes.md`, and below. **They are still provisional in the submitted `output.csv`**: the submitted run used neither a model nor a readings file. With the readings file all of them are computed normally and come out identical (section 5.4).", "",
             "| case | reported_status | provisional steps |", "|---|---|---|",
         });
         foreach (var c in prov)
@@ -285,7 +285,7 @@ public static class EvaluationReport
         {
             "## 8. Remaining failures and known weaknesses", "",
             $"* dev samples: **{extra} wrong or extra steps**, missing gold steps: " + (miss2.Count > 0 ? string.Join(", ", miss2.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => $"{kv.Value} x {kv.Key}")) : "none") + ".",
-            $"* main set: {amb} deletion rows with an ambiguous account (candidates cannot be separated) and {none_} with no candidate; {anaAmb} ambiguous anonymized-analytics rows. Such steps are omitted rather than guessed (a guess among 2 candidates is break-even for F1, among 3 or more it loses; see `phase3_results.md` section 4).",
+            $"* main set: {amb} deletion rows with an ambiguous account (candidates cannot be separated) and {none_} with no candidate; {anaAmb} ambiguous anonymized-analytics rows. Such steps are omitted rather than guessed (a guess among 2 candidates is break-even for F1, among 3 or more it loses; see `ARCHITECTURE.md`, decision D2).",
             "* **The second-of-minute heuristics exploit regularities of this dataset's synthetic event timing and would not be reliable on production logs.** They can be switched off with `--no-timing-heuristics`; section 5 shows what that costs (step F1 on the samples, rows without an account step).",
             "* The legal-hold exposed-identifier shape and every category without a labeled sample are verified only by the synthetic cases.",
             "* Classifier lexicons cover eight languages; other languages end as ambiguous and therefore NOT_APPLICABLE.",

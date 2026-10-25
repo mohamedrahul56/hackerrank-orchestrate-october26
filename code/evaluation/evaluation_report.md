@@ -245,7 +245,7 @@ Awkward inputs (empty or missing fields, bad timestamps, duplicate or unknown id
 
 ## 6. Provisional rows
 
-9 deletion requests have a screenshot as their only state evidence. Without a vision-model key each is answered `INCOMPLETE` with three steps (finding on the record the data catalog ties to the user inside the window, citing the in-window screenshot of the same system; remediation; verification). The state is assumed, not read. They are listed in `output.notes.md`, in `phase4_results.md` and below. **They are still provisional in the submitted `output.csv`**: the submitted run used neither a model nor a readings file. With the readings file all of them are computed normally and come out identical (section 5.4).
+9 deletion requests have a screenshot as their only state evidence. Without a vision-model key each is answered `INCOMPLETE` with three steps (finding on the record the data catalog ties to the user inside the window, citing the in-window screenshot of the same system; remediation; verification). The state is assumed, not read. They are listed in `output.notes.md`, and below. **They are still provisional in the submitted `output.csv`**: the submitted run used neither a model nor a readings file. With the readings file all of them are computed normally and come out identical (section 5.4).
 
 | case | reported_status | provisional steps |
 |---|---|---|
@@ -334,7 +334,7 @@ The loop log below is `CHANGELOG.md` verbatim: each row is a change with the mot
 ## 8. Remaining failures and known weaknesses
 
 * dev samples: **0 wrong or extra steps**, missing gold steps: 3 x resource id appears nowhere in the participant data (unreachable).
-* main set: 25 deletion rows with an ambiguous account (candidates cannot be separated) and 11 with no candidate; 28 ambiguous anonymized-analytics rows. Such steps are omitted rather than guessed (a guess among 2 candidates is break-even for F1, among 3 or more it loses; see `phase3_results.md` section 4).
+* main set: 25 deletion rows with an ambiguous account (candidates cannot be separated) and 11 with no candidate; 28 ambiguous anonymized-analytics rows. Such steps are omitted rather than guessed (a guess among 2 candidates is break-even for F1, among 3 or more it loses; see `ARCHITECTURE.md`, decision D2).
 * **The second-of-minute heuristics exploit regularities of this dataset's synthetic event timing and would not be reliable on production logs.** They can be switched off with `--no-timing-heuristics`; section 5 shows what that costs (step F1 on the samples, rows without an account step).
 * The legal-hold exposed-identifier shape and every category without a labeled sample are verified only by the synthetic cases.
 * Classifier lexicons cover eight languages; other languages end as ambiguous and therefore NOT_APPLICABLE.
@@ -343,7 +343,7 @@ The loop log below is `CHANGELOG.md` verbatim: each row is a change with the mot
 ## 9. Determinism, robustness, tests
 
 * two full runs on all 518 requests (deterministic path, no model): exit codes 0, 0; files **byte-identical**; validator errors on the written file: 0. The committed `output.csv` is byte-identical to a fresh run: **yes**.
-* test suite: **452 tests, 1 failures, 0 skipped** (`dotnet test code/tests/Auditor.Tests`): scorer and validator, classifier (112 request sentences, paraphrases), pipeline stages, the synthetic cases, robustness (malformed rows, corrupt files, API timeouts / rate limits / invalid JSON / refusals with a fake client, injection strings in model-written fields), the edge-case regression tests, bounded concurrent image reads, the resume tests (a real kill of the process), readings-file tests, packaging rules, no-hardcoding scan and secrets scan.
+* test suite: **452 tests, 0 failures, 0 skipped** (`dotnet test code/tests/Auditor.Tests`): scorer and validator, classifier (112 request sentences, paraphrases), pipeline stages, the synthetic cases, robustness (malformed rows, corrupt files, API timeouts / rate limits / invalid JSON / refusals with a fake client, injection strings in model-written fields), the edge-case regression tests, bounded concurrent image reads, the resume tests (a real kill of the process), readings-file tests, packaging rules, no-hardcoding scan and secrets scan.
 * model nondeterminism (cleared-cache rerun with a real model): **not measured** (no key); cold / warm / cleared-cache agreement is tested with a fake client.
 
 ## 10. Not measured
