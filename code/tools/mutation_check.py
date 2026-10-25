@@ -113,9 +113,9 @@ def main(argv: list[str] | None = None) -> int:
              f"Control: the unmodified copy passes all {control_n} of those tests, so every failure below is caused by the mutation. "
              "M1-M3 are the three requested mutations; M4-M5 are extra.", ""]
     lines += ["| mutation | broken rule | edited file | tests run | failing tests | verdict |", "|---|---|---|---|---|---|"]
-    for m, n, rc, failing in results:
+    for m, n, _rc, failing in results:
         lines.append(f"| {m.key}{'' if m.primary else ' (extra)'} | {m.rule} | `{m.file}` | {n} | {len(failing)} | **{'KILLED' if failing else 'SURVIVED'}** |")
-    for m, n, rc, failing in results:
+    for m, _n, _rc, failing in results:
         lines += ["", f"### {m.key}", "", f"Edit in `{m.file}`:", "", "```diff", "\n".join(f"- {l}" for l in m.old.rstrip("\n").splitlines()), "\n".join(f"+ {l}" for l in m.new.rstrip("\n").splitlines()), "```", "",
                   f"Failing tests ({len(failing)}):", ""]
         lines += [f"* `{f}`" for f in failing] or ["* (none: the mutation SURVIVED)"]

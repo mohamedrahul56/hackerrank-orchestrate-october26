@@ -5,7 +5,7 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import ROOT
 
 spec = importlib.util.spec_from_file_location("package_tool", ROOT / "code" / "tools" / "package.py")
 pkg = importlib.util.module_from_spec(spec)

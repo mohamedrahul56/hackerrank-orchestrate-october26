@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import DATASET, needs_dataset
 from auditor.dataset import load_dataset
 from auditor.outio import dumps_steps, write_output
 from auditor.validate import validate_output_file

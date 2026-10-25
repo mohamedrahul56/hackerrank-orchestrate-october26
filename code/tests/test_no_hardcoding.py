@@ -5,7 +5,7 @@ import json
 import re
 import unittest
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import DATASET, ROOT, needs_dataset
 
 CODE_FILES = [p for p in (ROOT / "code").rglob("*.py")
               if "tests" not in p.parts and "__pycache__" not in p.parts]

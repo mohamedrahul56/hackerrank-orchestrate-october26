@@ -14,6 +14,7 @@ JSON facts. (`classify.py` also has a hook for a model tie-break on ambiguous re
 git clone <this repository> && cd <it>
 make setup                      # pip install -r code/requirements.txt   (pypdf; anthropic is used only when ANTHROPIC_API_KEY is set)
 make test                       # the whole test suite; needs no key and no network
+make lint                       # ruff + mypy (config in code/pyproject.toml; pip install -r code/requirements-dev.txt first); both report no findings
 make run                        # all 518 requests -> ./output.csv  (+ output.notes.md, output.usage.jsonl)
 make score                      # the 32 labeled sample requests and the score report
 make explain CASE=case_48       # how one case got its answer; read-only, writes nothing
@@ -34,7 +35,7 @@ python3 -m pip install -r code/requirements.txt     # pypdf (PDF evidence) and a
 python3 code/main.py                                # reads dataset/, writes ./output.csv (518 rows, input order), output.notes.md and output.usage.jsonl
 ```
 
-Tested on Python 3.13. Reading is limited to `dataset/`; nothing else is read. The run is deterministic: two runs give byte-identical files. Useful options:
+Needs Python 3.12 or newer; tested on Python 3.13. Reading is limited to `dataset/`; nothing else is read. The run is deterministic: two runs give byte-identical files. Useful options:
 
 | option | effect |
 |---|---|

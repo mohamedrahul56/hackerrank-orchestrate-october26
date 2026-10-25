@@ -34,8 +34,8 @@ def explain(a: Auditor, case_id: str) -> str:
         raise KeyError(case_id)
     L: list[str] = [f"EXPLAIN {case_id}", "=" * (8 + len(case_id)), ""]
     if case_id not in a.requests:
-        res = a.audit(case_id)
-        L += [f"The request row is malformed ({a.bad_requests[case_id]}); it cannot be audited.", f"Answer: {res.status}, steps_json = []", f"Why: {'; '.join(res.notes)}"]
+        malformed = a.audit(case_id)
+        L += [f"The request row is malformed ({a.bad_requests[case_id]}); it cannot be audited.", f"Answer: {malformed.status}, steps_json = []", f"Why: {'; '.join(malformed.notes)}"]
         return "\n".join(L) + "\n"
     r = a.requests[case_id]
     L += ["0. THE REQUEST",
@@ -50,8 +50,8 @@ def explain(a: Auditor, case_id: str) -> str:
     L += ["1. WHAT THE PERSON ASKED FOR (classify.py)", f"  decision : {cls.label}  (method: {cls.method})"]
     L += [f"  because  : {x}" for x in cls.reasons] or ["  because  : (no reasons recorded)"]
     if cls.label != DELETION:
-        res = a.audit(case_id)
-        L += ["", "RESULT", f"  deletion_status = {res.status}, steps_json = []",
+        not_applicable = a.audit(case_id)
+        L += ["", "RESULT", f"  deletion_status = {not_applicable.status}, steps_json = []",
               "  A request that does not authorize deletion is NOT_APPLICABLE whatever the evidence says; no identity or evidence is examined."]
         return "\n".join(L) + "\n"
 

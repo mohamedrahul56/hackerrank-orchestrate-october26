@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import DATASET, ROOT
 from tests.test_llm_images import FakeClient, reply
 from auditor.dataset import parse_ts
 from auditor.evidence import imageobs

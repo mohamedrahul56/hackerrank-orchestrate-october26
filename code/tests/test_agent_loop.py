@@ -7,7 +7,6 @@ from types import SimpleNamespace
 
 from tests._common import *  # noqa: F401,F403
 from tests.test_agent_tools import make_png
-from auditor.agent import tools
 from auditor.agent.loop import AgentFailure, AgentImageReader, AgentLimits
 from auditor.llm import LLM, LLMUnavailable, SchemaError
 

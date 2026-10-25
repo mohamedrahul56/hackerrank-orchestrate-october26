@@ -67,7 +67,7 @@ def main() -> int:
           f"* the {len(nadel)} remaining NOT_APPLICABLE rows are exactly the requests the classifier says do not authorize deletion "
           f"({sum(1 for c in nadel if a.classification[c].label != 'DELETION')} of {len(nadel)}); their logic is untouched. Deletion requests that fall back to NOT_APPLICABLE: "
           f"**{sum(1 for c in nadel if a.classification[c].label == 'DELETION')}**.",
-          f"* the validator accepts every provisional row (output re-read from disk: see section 4).", "",
+          "* the validator accepts every provisional row (output re-read from disk: see section 4).", "",
           f"### Provisional rows ({len(prov)}) - replaced automatically by real findings once the screenshots are read", "",
           "| case | reported_status | provisional answer | basis |", "|---|---|---|---|"]
     for c in prov:

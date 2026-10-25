@@ -14,7 +14,7 @@ import os
 from dataclasses import dataclass, field, fields, replace
 from datetime import timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 try:
     import tomllib
@@ -194,8 +194,8 @@ def from_file(path: Path | None = None, base: Settings | None = None) -> Setting
     return s
 
 
-def from_env(s: Settings, env: dict[str, str] | None = None) -> Settings:
-    env = os.environ if env is None else env
+def from_env(s: Settings, environ: Mapping[str, str] | None = None) -> Settings:
+    env: Mapping[str, str] = os.environ if environ is None else environ
     for var, dotted in (("AUDITOR_VLM_MODEL", "llm.model"), ("AUDITOR_VLM_FALLBACK_MODEL", "llm.fallback_model"), ("AUDITOR_CACHE_DIR", "llm.cache_dir")):
         if env.get(var):
             s = apply(s, dotted, env[var])

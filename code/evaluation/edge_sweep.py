@@ -26,7 +26,6 @@ import io
 import json
 import os
 import re
-import sqlite3
 import sys
 import tempfile
 import time
@@ -749,7 +748,7 @@ def retain_scenarios() -> None:
               "later evidence cannot create a finding or a citation at audit_at")
     def _r11(tmp):
         s = hold(tmp, "2033-12-31T23:59:59Z", fid="evidence_x3").audit()
-        w = hold(tmp, "2033-12-31T23:59:59Z")
+        hold(tmp, "2033-12-31T23:59:59Z")
         return ok_if(not s.error, s.text())
 
 
@@ -884,7 +883,6 @@ def png_scenarios() -> None:
             self.reading, self.calls = reading, 0
 
     def extractor_for(reading):
-        from auditor.llm import LLMUnavailable
         calls = []
 
         def extract(path, system, instruction, schema, version):
@@ -1190,7 +1188,7 @@ def render(rows: list[Row], heading: str = "# Edge-case sweep", before: list[dic
     if before is not None:
         bad = [b for b in before if b["verdict"] == "DEFECT"]
         now = {r.sid: r for r in rows}
-        L += ["", f"## Defects found, and what was done", "",
+        L += ["", "## Defects found, and what was done", "",
               f"The same sweep run on the code before any fix found **{len(bad)} defects** among its first {len(before)} scenarios (the table above is the run after the fixes"
               + (f"; {', '.join(sorted(r.sid for r in rows if r.sid not in {x['sid'] for x in before if x['sid'] != 'D01'} and not r.sid.startswith('D')))} were added later, with the readings-file feature). " if len(rows) > len(before) else "). ")
               + 

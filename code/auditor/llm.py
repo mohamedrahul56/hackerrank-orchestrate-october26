@@ -49,7 +49,7 @@ class SchemaError(ValueError):
 def validate_schema(value: Any, schema: dict, path: str = "$") -> None:
     """Small JSON-schema subset (type, required, properties, items, enum, additionalProperties=false, maxItems, maxLength). Raises SchemaError."""
     t = schema.get("type")
-    types = {"object": dict, "array": list, "string": str, "boolean": bool, "integer": int, "number": (int, float)}
+    types: dict[str, type | tuple[type, ...]] = {"object": dict, "array": list, "string": str, "boolean": bool, "integer": int, "number": (int, float)}
     if t and not isinstance(value, types[t]) or (t == "integer" and isinstance(value, bool)):
         raise SchemaError(f"{path}: expected {t}, got {type(value).__name__}")
     if "enum" in schema and value not in schema["enum"]:

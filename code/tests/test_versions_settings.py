@@ -8,7 +8,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import DATASET, ROOT
 from tests.test_llm_images import GOOD, FakeClient, reply
 from auditor import settings as S
 from auditor import versions

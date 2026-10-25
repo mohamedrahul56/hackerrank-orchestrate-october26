@@ -4,7 +4,7 @@ import csv
 import re
 import unittest
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import DATASET, ROOT, needs_dataset
 from auditor.classify import (AMBIGUOUS, DELETION, NOT_APPLICABLE, classify_request, label_clause, split_clauses)
 
 SENTENCE_MD = ROOT / "code" / "evaluation" / "request_sentences.md"

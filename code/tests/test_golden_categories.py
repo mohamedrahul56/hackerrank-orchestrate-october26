@@ -4,11 +4,9 @@ Each golden answer is typed out by hand below (status + every step: phase, opera
 AGENTS.md 6.4, NOT computed by any code of this repository. The pipeline runs on a minimal dataset built for the case and must reproduce it exactly.
 Case n has the account `account_n01` (already deleted, so it is only verified), the retained audit record `audit_record_n02`, and the resource under test `<prefix>_n03`."""
 import csv
-import tempfile
 import unittest
-from pathlib import Path
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import DATASET
 import extra_cases as xc
 
 E, F, V = "evidence_x1", "FINDING", "VERIFICATION"

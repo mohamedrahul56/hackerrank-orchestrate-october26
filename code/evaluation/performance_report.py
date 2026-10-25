@@ -90,7 +90,7 @@ def build(before: list[dict], after: list[dict]) -> str:
           "### Cost per request after the change (microseconds, median run)", "",
           "| input | whole run | timeline discovery | per-case audit | validation | classification |", "|---|---|---|---|---|---|"]
     for a_ in after:
-        us = lambda k: f"{1e6 * stage(a_, k) / a_['cases']:.0f}"  # noqa: E731
+        us = lambda k, a=a_: f"{1e6 * stage(a, k) / a['cases']:.0f}"  # noqa: E731
         L.append(f"| x{a_['repeat']} | {1e6 * a_['total_s'] / a_['cases']:.0f} | {us('discovery_total')} | {us('audit_cases_loop')} | {us('validate_output')} | {us('classify_requests')} |")
     L += ["", "A linear stage has a flat column. The whole-run column falls at first because the fixed start-up cost is spread over more requests.", "",
           "## 4. Observed growth", "",

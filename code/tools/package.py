@@ -17,7 +17,6 @@ from __future__ import annotations
 import argparse
 import csv
 import re
-import sys
 import zipfile
 from pathlib import Path
 
@@ -26,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ARCHIVE_EXT = {".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".7z", ".rar", ".jar", ".whl"}
 JUDGE_IGNORED_EXT = {".csv", ".tsv", ".json", ".jsonl", ".sql", ".log"}
 ALLOWED_IGNORED = {"code/config/prices.example.json"}
-EXCLUDED_DIRS = {"__pycache__", ".git", ".venv", "venv", "node_modules", ".cache", ".pytest_cache", ".mypy_cache"}
+EXCLUDED_DIRS = {"__pycache__", ".git", ".venv", "venv", "node_modules", ".cache", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
 EXCLUDED_PREFIXES = ("code/out/", "code/.cache/", "dataset/", "agent-trace", "output")
 EXCLUDED_NAMES = {".env", "prices.json", "log.txt", ".DS_Store"}
 REQUIRED = ["README.md", "ARCHITECTURE.md", "Makefile", "code/main.py", "code/requirements.txt", "code/evaluation/extra_cases.md", "code/NOTES.md"]

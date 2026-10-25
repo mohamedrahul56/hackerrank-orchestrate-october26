@@ -41,9 +41,9 @@ def text_artifact_obs(base: EvidenceBase, file_id: str, file_t: datetime, text: 
         if row["alias"] and row["alias"] != row["resource_id"] and row["alias"].lower() in low and row["resource_id"] not in seen:
             seen.add(row["resource_id"])
             prefix = row["resource_id"].rsplit("_", 1)[0]
-            cat = {"export": "USER_EXPORT", "object": "SUPPORT_ATTACHMENT"}.get(prefix)
-            if cat:
-                base.obs.append(Obs(file_id, file_t, file_t, row["system"], row["resource_id"], cat, "PRESENT",
+            alias_cat = {"export": "USER_EXPORT", "object": "SUPPORT_ATTACHMENT"}.get(prefix)
+            if alias_cat:
+                base.obs.append(Obs(file_id, file_t, file_t, row["system"], row["resource_id"], alias_cat, "PRESENT",
                                     idents | row["idents"], source + ":alias"))
 
 

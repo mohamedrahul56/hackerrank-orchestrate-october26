@@ -2,7 +2,7 @@
 import subprocess
 import unittest
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import ROOT
 
 
 class HygieneTests(unittest.TestCase):

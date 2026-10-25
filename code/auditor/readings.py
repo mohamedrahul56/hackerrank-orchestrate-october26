@@ -19,7 +19,7 @@ import json
 import time
 from pathlib import Path
 
-from .llm import LLMUnavailable, SchemaError, UsageLog, validate_schema
+from .llm import LLMUnavailable, UsageLog, validate_schema
 
 
 class ReadingsError(ValueError):

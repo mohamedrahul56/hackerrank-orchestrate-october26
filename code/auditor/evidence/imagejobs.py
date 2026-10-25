@@ -29,11 +29,17 @@ def prefetch(extractor: Callable, paths: list[Path], system: str, instruction: s
 
     with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="image-read") as pool:
         results = dict(zip(unique, pool.map(one, unique)))        # map yields in submission order; the pool bounds the calls in flight
+    return _Replay(results, one, getattr(extractor, "obs_source", "image:vlm"))
 
-    def replay(path: Path, *args, **kw):
-        kind, value = results[path] if path in results else one(path)
+
+class _Replay:
+    """The extractor handed to `load_image`: answers from the prefetched results (re-raising a stored exception), and carries the source tag of the observations."""
+
+    def __init__(self, results: dict, one: Callable, obs_source: str):
+        self._results, self._one, self.obs_source = results, one, obs_source
+
+    def __call__(self, path: Path, *args, **kw):
+        kind, value = self._results[path] if path in self._results else self._one(path)
         if kind == "err":
             raise value
         return value
-    replay.obs_source = getattr(extractor, "obs_source", "image:vlm")          # the source tag of the observations travels with the extractor
-    return replay

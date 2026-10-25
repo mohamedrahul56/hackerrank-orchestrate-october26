@@ -8,7 +8,7 @@ import unittest
 from datetime import timezone
 from pathlib import Path
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import ROOT
 import extra_cases as xc
 from auditor.audit import Auditor, Config
 from auditor.dataset import DatasetError, _rows, parse_ts

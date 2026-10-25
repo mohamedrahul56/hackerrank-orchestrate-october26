@@ -12,7 +12,6 @@ Flow for one case (every decision here is code; the only model call is the optio
 """
 from __future__ import annotations
 
-import csv
 import logging
 import time
 from contextlib import contextmanager
@@ -23,13 +22,13 @@ from pathlib import Path
 
 from . import discover as dsc
 from .classify import DELETION, classify_request
-from .dataset import Request, load_requests_lenient, parse_ts
+from .dataset import Request, load_requests_lenient
 from .evidence.imageobs import state_from_description
 from .evidence.load import catalog_rows, load_evidence, manifest_rows
-from .evidence.records import EvidenceBase, Obs, system_for
+from .evidence.records import EvidenceBase, system_for
 from .identity import IdentityResolver
 from .link import Linker
-from .policy import PolicyEngine
+from .policy import PolicyEngine, Verdict
 from .settings import Settings, Tunables
 from .schema import canonicalize, make_step
 from .state import ResourceState, resolve, usable
@@ -167,13 +166,14 @@ class Auditor:
             self.account_asg = dsc.assign_accounts(cases, self.events, explicit, owners, cohort if self.cfg.use_cohort_filter else None, own, self.cfg.tune)
         t_ana = time.perf_counter()
         anonymized = {o.resource for o in self.base.obs if o.category == "ANALYTICS_PROFILE" and o.state == "ANONYMIZED" and not o.idents}
-        self._chain_times, self._chain_hits = None, {}
-        self.chain_events = []                                   # every completed policy action that belongs to some known user
+        self._chain_times: list[datetime] | None = None
+        self._chain_hits: dict[str, list[set[str]]] = {}
+        self.chain_events: list[tuple[datetime, int, set[str]]] = []                                   # every completed policy action that belongs to some known user
         for rid, evs in self.events_by_resource.items():
-            owners = set(self.link.resource_users.get(rid, ()))
+            rid_owners = set(self.link.resource_users.get(rid, ()))
             for e in evs:
-                if e.source == "deletion_worker" and e.result == "SUCCESS" and e.event_type in CHAIN_POSITION and owners:
-                    self.chain_events.append((e.t, CHAIN_POSITION[e.event_type], owners))
+                if e.source == "deletion_worker" and e.result == "SUCCESS" and e.event_type in CHAIN_POSITION and rid_owners:
+                    self.chain_events.append((e.t, CHAIN_POSITION[e.event_type], rid_owners))
         has_own = {c.case_id for c in cases if any(x.startswith("analytics_") for x in self.link.resources_of(set(c.users)))}
         account_time = {cid: a.event.t for cid, a in self.account_asg.items() if a.resource and a.event is not None} if self.cfg.use_timing_heuristics else None
         self.analytics_inputs = ([c for c in cases if c.case_id not in has_own], self.events, anonymized, chain, self._foreign_chain, account_time, self.cfg.tune)
@@ -263,8 +263,8 @@ class Auditor:
                 states[rid] = st
         # an account known only from the activity stream has no observation: treat as absent (claim) and cite the activity id
         steps: list[dict] = []
-        violations = []
-        compliant = []
+        violations: list[tuple[ResourceState, Verdict]] = []
+        compliant: list[tuple[ResourceState, Verdict]] = []
         tr.states = dict(states)
         for rid, st in states.items():
             if st.until is not None and st.until <= audit_at:
@@ -292,9 +292,9 @@ class Auditor:
         for rid, how in resources.items():
             if rid in states or not rid.startswith("account_"):
                 continue
-            first = min((o.file_t for o in self.link.by_resource.get(rid, [])), default=None)
+            first_seen = min((o.file_t for o in self.link.by_resource.get(rid, [])), default=None)
             deleted_in_window = rid in self.known_accounts.get(case_id, ())     # linked to the user AND deleted by the worker in the window
-            if how != "explicit" or deleted_in_window or (first is not None and t0 <= first <= audit_at + timedelta(days=self.cfg.tune.later_link_max_days)):
+            if how != "explicit" or deleted_in_window or (first_seen is not None and t0 <= first_seen <= audit_at + timedelta(days=self.cfg.tune.later_link_max_days)):
                 unobserved_accounts.append(rid)
         # other linked resources with no state evidence in the window that first appear at/after the request (e.g. a retained
         # audit record seen only in a later snapshot of the cohort): their END state is still a required check, with no citation
@@ -303,13 +303,14 @@ class Auditor:
             if rid in states or how != "explicit" or rid.startswith("account_"):
                 continue
             seen = self.link.by_resource.get(rid, [])
-            first = min((o.file_t for o in seen), default=None)
-            if first is not None and t0 <= first <= audit_at + timedelta(days=self.cfg.tune.later_link_max_days):
+            first_linked = min((o.file_t for o in seen), default=None)
+            if first_linked is not None and t0 <= first_linked <= audit_at + timedelta(days=self.cfg.tune.later_link_max_days):
                 unobserved_linked.append((rid, max(seen, key=lambda o: o.file_t)))
 
         status = "INCOMPLETE" if violations else "COMPLETE"
         cite_ok = status == "COMPLETE"
         for st, v in violations:
+            assert v.treatment.finding is not None and v.treatment.fix is not None     # a violation always names its finding and fix (policy.py)
             steps.append(tr.why(make_step("FINDING", v.treatment.finding, st.system, st.resource, st.file_id),
                                 f"{st.resource} is {st.state} at audit_at ({tr.verdicts[st.resource]}); cites {st.file_id}, the latest in-window file that shows it"))
             steps.append(tr.why(make_step("REMEDIATION", v.treatment.fix, st.system, st.resource), "proposed fix for the finding above (future work, so no evidence id)"))
@@ -327,8 +328,8 @@ class Auditor:
                                         f"{rid} is tied to the user and first appears in {o.file_id} (a later snapshot of the same scenario): its required end state is still a check, with no citation"))
                     notes.append(f"{rid}: no state evidence in the window; end-state check added from its later/linked observation ({o.file_id})")
         elif unobserved_linked:
-            for rid, o in unobserved_linked:
-                tr.omitted.append((rid, f"tied to the user but no evidence captured inside the window shows it, and in a COMPLETE row every step must cite evidence: no step"))
+            for rid, _ in unobserved_linked:
+                tr.omitted.append((rid, "tied to the user but no evidence captured inside the window shows it, and in a COMPLETE row every step must cite evidence: no step"))
         for rid in unobserved_accounts:                          # account known only from the activity stream
             ev = activity_for.get(rid)
             cite = ""
@@ -381,7 +382,7 @@ class Auditor:
             prefix = rid.rsplit("_", 1)[0]
             judged = state_from_description(prefix, {"status_words": [], "emails": ["x@example.test"], "phones": [], "shows_direct_identifiers": True})
             v = self.policy.judge(*judged) if judged else None
-            if v is None or not v.violation:
+            if v is None or not v.violation or v.treatment.finding is None or v.treatment.fix is None:      # a violation always names its finding and fix
                 continue
             system = self.link.catalog_systems.get(rid) or system_for(rid)
             shots = [m for m in self.manifest if m["file_path"].lower().endswith(".png") and r.requested_at <= m["t"] <= r.audit_at

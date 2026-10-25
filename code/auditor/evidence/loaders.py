@@ -66,7 +66,6 @@ def _record_obs(base: EvidenceBase, file_id: str, file_t: datetime, t: datetime,
 
 def load_sql(base: EvidenceBase, file_id: str, path: Path, file_t: datetime) -> None:
     tables = read_sql_tables(path)
-    text = path.read_text(encoding="utf-8")
     for name, rows in tables.items():
         if name == "snapshot_scope":                               # inventory: which systems this snapshot covers
             for r in rows:

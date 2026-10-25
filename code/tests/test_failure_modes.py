@@ -7,7 +7,7 @@ from contextlib import redirect_stderr
 from pathlib import Path
 from unittest import mock
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import DATASET, ROOT
 from auditor.audit import Auditor, Config
 from auditor.validate import Issue
 

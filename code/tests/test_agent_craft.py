@@ -7,7 +7,7 @@ from tests._common import ROOT
 from auditor.agent import gate, prompts, tools
 from auditor.evidence.imageobs import state_from_description
 from auditor.evidence.records import SYSTEM_BY_PREFIX
-from auditor.llm import validate_schema
+from auditor.llm import SchemaError, validate_schema
 
 SYSTEM = prompts.load("image_reader.system.md")
 TASK = prompts.load("image_reader.task.md")
@@ -34,7 +34,7 @@ class ToolContracts(unittest.TestCase):
         plain = {k: v for k, v in tools.SUBMIT_SCHEMA.items()}
         good = {"screen": "s", "records": [], "unknown": []}
         validate_schema(good, plain)
-        with self.assertRaises(Exception):
+        with self.assertRaises(SchemaError):
             validate_schema({"screen": "s"}, plain)
 
     def test_zoom_description_states_the_coordinate_system_the_limits_and_the_error_behaviour(self):

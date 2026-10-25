@@ -3,7 +3,7 @@ import importlib.util
 import sys
 import unittest
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import ROOT
 
 spec = importlib.util.spec_from_file_location("mutation_tool", ROOT / "code" / "tools" / "mutation_check.py")
 mut = importlib.util.module_from_spec(spec)

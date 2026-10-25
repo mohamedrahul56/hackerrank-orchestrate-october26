@@ -3,7 +3,7 @@ and the Markdown must be what the generator produces (so reviewers read exactly 
 import csv
 import unittest
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import DATASET, needs_dataset
 import extra_cases as xc
 
 

@@ -31,7 +31,7 @@ from auditor.dataset import load_dataset  # noqa: E402
 from auditor.validate import validate_output_file  # noqa: E402
 from holdout import HEADER, account_holdout, analytics_holdout  # noqa: E402
 from phase2_report import as_rows, classify_missing, metrics_line, pct, run  # noqa: E402
-from score import Row, assign_splits, build_report, read_rows, score  # noqa: E402
+from score import assign_splits, build_report, read_rows, score  # noqa: E402
 
 D = ROOT / "dataset"
 OUT = ROOT / "code" / "evaluation"

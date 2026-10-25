@@ -5,11 +5,12 @@ PYTHON ?= python3
 CASE   ?=
 
 .DEFAULT_GOAL := help
-.PHONY: help setup test run score explain edge agent package check bench clean
+.PHONY: help setup test lint run score explain edge agent package check bench clean
 
 help:
 	@echo "make setup            install the Python dependencies (pypdf; anthropic is only used when ANTHROPIC_API_KEY is set)"
 	@echo "make test             run the whole test suite"
+	@echo "make lint             ruff (unused imports and variables, likely bugs) and mypy over the code; needs: pip install -r code/requirements-dev.txt"
 	@echo "make run              answer all 518 requests: writes ./output.csv, ./output.notes.md, ./output.usage.jsonl"
 	@echo "make score            run the 32 labeled sample requests and print the score report"
 	@echo "make explain CASE=case_48   print how one case got its answer (read-only, writes nothing)"
@@ -25,6 +26,9 @@ setup:
 
 test:
 	$(PYTHON) -m unittest discover -s code/tests -t code
+
+lint:
+	cd code && ruff check . && mypy
 
 run:
 	$(PYTHON) code/main.py

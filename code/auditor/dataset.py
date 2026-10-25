@@ -110,13 +110,13 @@ def load_requests_lenient(path: Path) -> tuple[list[Request], list[BadRow], list
         seen.add(cid)
         order.append(cid)
         ts = {k: try_ts(r.get(k)) for k in ("requested_at", "reported_at", "audit_at")}
-        broken = [k for k, v in ts.items() if v is None]
-        if broken:
-            bad.append(BadRow(cid, i, f"unparseable {', '.join(broken)}"))
+        requested_at, reported_at, audit_at = ts["requested_at"], ts["reported_at"], ts["audit_at"]
+        if requested_at is None or reported_at is None or audit_at is None:
+            bad.append(BadRow(cid, i, f"unparseable {', '.join(k for k, v in ts.items() if v is None)}"))
         elif not (r.get("email") or "").strip():
             bad.append(BadRow(cid, i, "empty email"))
         else:
-            good.append(Request(cid, r["email"], ts["requested_at"], r.get("reported_status", ""), ts["reported_at"], ts["audit_at"], r.get("request_text", "")))
+            good.append(Request(cid, r["email"], requested_at, r.get("reported_status", ""), reported_at, audit_at, r.get("request_text", "")))
     return good, bad, order
 
 

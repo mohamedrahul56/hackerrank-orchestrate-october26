@@ -2,7 +2,7 @@
 import re
 import unittest
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import ROOT
 
 DOCS = ["README.md", "ARCHITECTURE.md", "code/NOTES.md", "code/INTERVIEW_PREP.md", "code/evaluation/usage_report.md",
         "code/evaluation/evaluation_report.md", "code/evaluation/agent_layer_report.md"]

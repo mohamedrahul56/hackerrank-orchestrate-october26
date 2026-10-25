@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 try:                                                          # soft dependency: without Pillow the zoom tool is simply not offered
     from PIL import Image
 except ImportError:                                           # pragma: no cover - exercised through the `available` flag in tests
-    Image = None                                              # type: ignore[assignment]
+    Image = None
 
 UNKNOWN_FIELDS = ("resource_id", "emails", "user_ids", "phones", "status_words", "aliases", "shows_direct_identifiers", "selected")
 MIN_SIDE = 32                                                 # a crop smaller than this shows nothing worth enlarging

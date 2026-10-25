@@ -2,7 +2,7 @@
 import re
 import unittest
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import ROOT
 import edge_sweep as sweep
 
 AREAS = ("empty or missing fields", "bad timestamps", "duplicate / unknown case_id", "e-mail spelling", "old e-mails", "several requests per user", "events after audit_at",

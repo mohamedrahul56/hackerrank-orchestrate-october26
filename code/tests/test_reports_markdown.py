@@ -3,7 +3,7 @@ import re
 import unittest
 from pathlib import Path
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import ROOT
 
 REPORTS = sorted((ROOT / "code" / "evaluation").glob("*.md")) + [ROOT / "README.md", ROOT / "ARCHITECTURE.md", ROOT / "code" / "NOTES.md", ROOT / "code" / "SPEC.md", ROOT / "code" / "INTERVIEW_PREP.md"]
 REQUIRED = [ROOT / "code" / "evaluation" / "evaluation_report.md", ROOT / "code" / "evaluation" / "usage_report.md", ROOT / "README.md", ROOT / "code" / "INTERVIEW_PREP.md",

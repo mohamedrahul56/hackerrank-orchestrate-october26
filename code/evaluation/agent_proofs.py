@@ -28,7 +28,7 @@ sys.path.insert(0, str(ROOT / "code"))
 sys.path.insert(0, str(ROOT / "code" / "evaluation"))
 
 from auditor import settings as S  # noqa: E402
-from auditor.agent import gate as gate_mod, tools  # noqa: E402
+from auditor.agent import tools  # noqa: E402
 from auditor.agent.loop import AgentLimits  # noqa: E402
 from auditor.llm import LLM  # noqa: E402
 

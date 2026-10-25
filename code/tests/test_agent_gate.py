@@ -1,11 +1,10 @@
 """The gate (auditor/agent/gate.py) and rule G10 (state.resolve): accept/reject pairs for every rule, a fuzz run, and 'no model observation = old behaviour'."""
-import copy
 import random
 import unittest
 from datetime import datetime, timedelta, timezone
 
 from tests._common import *  # noqa: F401,F403
-from auditor.agent import gate, tools
+from auditor.agent import gate
 from auditor.agent.gate import GateError
 from auditor.dataset import parse_ts
 from auditor.evidence import imageobs

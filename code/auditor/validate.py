@@ -15,7 +15,7 @@ from typing import Any
 
 from .dataset import Dataset
 from .schema import (
-    ALLOWED_TRIPLES, FINDING_TO_REMEDIATIONS, OP_RANK, OUTPUT_HEADER, PHASE_RANK, PHASES,
+    ALLOWED_TRIPLES, FINDING_TO_REMEDIATIONS, OUTPUT_HEADER, PHASES,
     REMEDIATION_TO_VERIFICATION, STATUSES, STEP_FIELDS, sort_key, valid_resource_id,
 )
 from .outio import read_output_raw

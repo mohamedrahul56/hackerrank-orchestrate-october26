@@ -23,6 +23,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import IO
 
 from .audit import Auditor, CaseResult
 
@@ -83,7 +84,7 @@ class Checkpoint:
         self.path, self.key = Path(path), key
         self.done: dict[str, CaseResult] = {}
         self.how = "fresh"
-        self._fh = None
+        self._fh: IO[str] | None = None
         self._since_sync = 0
         if self.path.exists() and restart:
             self.how = "restart requested: the old checkpoint was ignored"
@@ -130,21 +131,27 @@ class Checkpoint:
         self.done.clear()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._fh = self.path.open("w", encoding="utf-8")
-        self._fh.write(_line({"kind": "header", "format": FORMAT, "key": self.key}))
+        self._out.write(_line({"kind": "header", "format": FORMAT, "key": self.key}))
         self._sync()
 
     # ---------------------------------------------------------------------------------------- writing
     def add(self, r: CaseResult) -> None:
         self.done[r.case_id] = r
-        self._fh.write(_line(to_payload(r)))
-        self._fh.flush()
+        self._out.write(_line(to_payload(r)))
+        self._out.flush()
         self._since_sync += 1
         if self._since_sync >= FSYNC_EVERY:
             self._sync()
 
+    @property
+    def _out(self) -> IO[str]:
+        if self._fh is None:
+            raise RuntimeError("the checkpoint file is not open")
+        return self._fh
+
     def _sync(self) -> None:
-        self._fh.flush()
-        os.fsync(self._fh.fileno())
+        self._out.flush()
+        os.fsync(self._out.fileno())
         self._since_sync = 0
 
     def close(self, remove: bool = False) -> None:

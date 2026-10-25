@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import DATASET, ROOT, needs_dataset
 import extra_cases as xc
 
 # AGENTS.md 6.3 / 6.4, typed out again on purpose (not imported from auditor.schema): phase order, operation order inside a phase, state of each operation.

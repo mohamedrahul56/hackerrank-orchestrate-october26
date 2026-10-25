@@ -52,7 +52,6 @@ def metrics_line(name: str, gold, pred, ids) -> str:
 def classify_missing(a: Auditor, step: dict) -> str:
     """Why the pipeline did not produce a gold step, from what the participant data contains (dev cases only)."""
     rid = step["resource_id"]
-    seen_anywhere = bool(a.link.by_resource.get(rid)) or bool(a.events_by_resource.get(rid))
     if not a.link.by_resource.get(rid) and not a.events_by_resource.get(rid):
         return "resource id appears nowhere in the participant data (unreachable)"
     if rid.startswith("account_"):

@@ -2,7 +2,7 @@
 import re
 import unittest
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import ROOT
 from performance_report import MARK, wall_time_table
 
 DOC = ROOT / "ARCHITECTURE.md"

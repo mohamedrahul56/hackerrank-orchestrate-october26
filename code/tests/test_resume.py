@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import DATASET, ROOT
 from auditor import checkpoint as ck
 from auditor import settings as S
 from auditor import versions

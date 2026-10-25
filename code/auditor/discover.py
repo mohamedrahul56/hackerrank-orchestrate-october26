@@ -10,17 +10,17 @@ groups stay unresolved - a guess with probability 1/k of being right is worse th
 """
 from __future__ import annotations
 
-import csv
 import heapq
 from functools import lru_cache
 import math
 from bisect import bisect_left, bisect_right
 from collections import Counter, defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Callable
 
-from .dataset import DatasetError, _rows, parse_ts, try_ts
+from .dataset import DatasetError, _rows, try_ts
 from .settings import Tunables
 
 # The numbers below are the defaults of settings.Tunables (config/settings.toml); every function takes `tune` and uses that instead.
@@ -342,7 +342,7 @@ def chain_ok(delta_seconds: float, k: int, tune: Tunables = DEFAULT_TUNE) -> boo
 
 def assign_anonymized_analytics(cases: list[CaseKey], events: list[Event], anonymized: set[str],
                                 chain: dict[str, list[tuple[datetime, int]]],
-                                foreign_chain: "callable | None" = None,
+                                foreign_chain: Callable[[CaseKey, Event], bool] | None = None,
                                 account_time: dict[str, datetime] | None = None, tune: Tunables = DEFAULT_TUNE) -> dict[str, Assignment]:
     """chain: case_id -> [(event time, position k)] of the case's OWN explicitly linked policy actions
     (REDACT support k=1, DISABLE flow k=2, BLOCK backup k=3).

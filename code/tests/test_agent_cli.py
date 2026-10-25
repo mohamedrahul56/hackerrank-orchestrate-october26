@@ -1,7 +1,5 @@
 """The agent layer through the command line: opt-in, no change without a key, settings, and a scripted replay of the 11 screenshot readings through the full loop."""
-import base64
 import contextlib
-import hashlib
 import importlib.util
 import io
 import json
@@ -9,10 +7,9 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest import mock
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import DATASET, ROOT
 from auditor import settings as S
 from auditor.llm import LLM
 from agent_proofs import ScriptedClient
@@ -104,7 +101,6 @@ class ScriptedReplay(unittest.TestCase):
             via_agent = d / "agent.csv"
             with mock.patch.dict(os.environ, no_key_env(), clear=True):
                 self.assertEqual(run(cli, "--images", "file", "--out", str(from_file))[0], 0)
-                real_llm = cli._make_llm
 
                 def fake_llm(st, stamp, usage_path):
                     return LLM(cache_dir=d / "cache", usage_path=usage_path, client=client, model=st.model, fallback_model=st.fallback_model, stamp=stamp,

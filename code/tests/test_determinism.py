@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import DATASET, ROOT, needs_dataset
 
 spec = importlib.util.spec_from_file_location("determinism_tool", ROOT / "code" / "tools" / "determinism_check.py")
 det = importlib.util.module_from_spec(spec)
