@@ -74,6 +74,7 @@ deterministic evidence supports) is applied only to observations whose source is
 the default run and `--images agent` without a key both reproduce the submitted `output.csv`, and a scripted replay of the 11 readings through the whole loop equals the run that takes them from a file.
 Any failure (refusal, invalid or missing submission, a cap, a repeated call, timeouts, a gate refusal, no key) ends in "not read" and the deterministic result stands. The model is not used on request text.
 What is NOT known: how a real model reads the screenshots, how often the gate rejects, what it costs, whether the zoom tool helps, and whether the real API accepts the request shapes: no request was ever sent.
+Every evidence file is first given a route by `code/auditor/evidence/router.py` (a deterministic parser for every format; the screenshot reader only for PNGs and only when one is configured; the model never chooses a route). A rejected key (401/403) stops all later model requests of the run, HTTP errors the caller caused are not retried, and `llm.max_run_tokens` can cap a run's spend. All of this is tested with fakes only: 0 calls, 0 tokens, no cost.
 
 **Readings from a file instead of a model (`--images file`).** `auditor/readings.py` answers the same call as the model wrapper from a JSON file keyed by the sha256 of each PNG's bytes
 (`llm.readings_file`, default `code/out/agent_readings.json`). The reading goes through the same JSON-schema validation and the same field sanitising as a model's answer, so a file cannot do

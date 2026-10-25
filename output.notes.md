@@ -4,12 +4,12 @@
 
 * pipeline version: `2026.10.5`
 * rules file (deletion_rules.csv) sha256: `e12d47ca4cbecc4a3c924b52705d9c5b1ebcfa71d6a28f58d988571eeccb32f7`
-* prompt `agent_image_reader`: version `agent-img-v1/agent-img-v1`, text+schema sha256 `f35c7e3157931a9263420a18f70a744f4ba7d88cef0bbf52029ae868d4ca750b`
+* prompt `agent_image_reader`: version `agent-img-v2/agent-img-v2`, text+schema sha256 `31283fcbc08cd83a22c893904a7115194f4252988aa41b1be0cd0d787e11bc7f`
 * prompt `image_reading`: version `img-v1`, text+schema sha256 `efbeb55e3b07b96064fc758c9bbda64d44ae9a32f8930b826f178eec33511fce`
-* code sha256 (auditor/*.py): `f763022abd1e6563013ec6638f6f6f4f8cdcf34533066548a73f2b6c0cf2fd0c`
-* settings fingerprint: `6ea863510c033d1e6b33d4a5c81465be030cb06376f8c05c239ae14f5bfcf9fe`
+* code sha256 (auditor/*.py): `39cbef44c18b17d88c2b605a179b6750ca537d78e6fc073d24f40e3a4fcfdae1`
+* settings fingerprint: `f543c4ab42518fa2b3cfeccb4f523cba043452e41f594ef4ea07ba3239c7f5c5`
 
-Effective settings: `pipeline.cohort_filter=false`, `pipeline.discovery=true`, `pipeline.later_linking=true`, `pipeline.provisional_rows=true`, `pipeline.timing_heuristics=true`, `llm.cache_dir=""`, `llm.fallback_model="claude-sonnet-5-5"`, `llm.images="auto"`, `llm.max_concurrency=4`, `llm.model="claude-haiku-5-5"`, `llm.readings_file=""`, `llm.timeout_seconds=60.0`, `discovery.account_window_minutes=[-90.0, 15.0]`, `discovery.analytics_min_llr=2.0`, `discovery.analytics_window_minutes=[-45.0, -5.0]`, `discovery.chain_gaps_seconds=[390, 449]`, `discovery.chain_tolerance_seconds=2.0`, `discovery.phase_margin=2.0`, `audit.later_link_max_days=7`, `agent.max_iterations=5`, `agent.max_tool_calls=6`, `agent.max_zooms=4`, `agent.wall_seconds=120.0`, `agent.zoom_max_px=1200`
+Effective settings: `pipeline.cohort_filter=false`, `pipeline.discovery=true`, `pipeline.later_linking=true`, `pipeline.provisional_rows=true`, `pipeline.timing_heuristics=true`, `llm.cache_dir=""`, `llm.fallback_model="claude-sonnet-5-5"`, `llm.images="auto"`, `llm.max_concurrency=4`, `llm.max_run_tokens=0`, `llm.model="claude-haiku-5-5"`, `llm.readings_file=""`, `llm.timeout_seconds=60.0`, `discovery.account_window_minutes=[-90.0, 15.0]`, `discovery.analytics_min_llr=2.0`, `discovery.analytics_window_minutes=[-45.0, -5.0]`, `discovery.chain_gaps_seconds=[390, 449]`, `discovery.chain_tolerance_seconds=2.0`, `discovery.phase_margin=2.0`, `audit.later_link_max_days=7`, `agent.max_iterations=5`, `agent.max_tool_calls=6`, `agent.max_zooms=4`, `agent.wall_seconds=120.0`, `agent.zoom_max_px=1200`
 
 cases: 518, status counts: {'INCOMPLETE': 356, 'COMPLETE': 152, 'NOT_APPLICABLE': 10}
 evidence warnings: 11
@@ -25,6 +25,35 @@ evidence warnings: 11
 * evidence_42: image not read (no image extractor configured)
 * evidence_46: image not read (no image extractor configured)
 * evidence_60: image not read (no image extractor configured)
+
+## Evidence routing (each manifest file: handler, reader, outcome; the model never chooses a route)
+
+| handler | reader | outcome | files |
+|---|---|---|---|
+| image | none | not read | 11 |
+| json | parser | parsed | 28 |
+| log | parser | parsed | 26 |
+| pdf | parser | no records | 1 |
+| pdf | parser | parsed | 3 |
+| sql | parser | no records | 1 |
+| sql | parser | parsed | 23 |
+| text | parser | parsed | 1 |
+
+Files that were not read or gave no record:
+* evidence_04 (image, not read): image not read (no image extractor configured)
+* evidence_09 (image, not read): image not read (no image extractor configured)
+* evidence_14 (image, not read): image not read (no image extractor configured)
+* evidence_19 (image, not read): image not read (no image extractor configured)
+* evidence_23 (image, not read): image not read (no image extractor configured)
+* evidence_27 (pdf, no records): .pdf file
+* evidence_28 (image, not read): image not read (no image extractor configured)
+* evidence_32 (image, not read): image not read (no image extractor configured)
+* evidence_37 (image, not read): image not read (no image extractor configured)
+* evidence_42 (image, not read): image not read (no image extractor configured)
+* evidence_46 (image, not read): image not read (no image extractor configured)
+* evidence_60 (image, not read): image not read (no image extractor configured)
+* evidence_90 (sql, no records): .sql file
+
 
 ## Provisional rows (9): built from structured data because the only state evidence is a screenshot that was not read
 
