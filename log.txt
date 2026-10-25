@@ -635,3 +635,34 @@ branch=claude/exciting-lamport-yrcfpx
 repo_root=/home/user/hackerrank-orchestrate-october26
 worktree=main
 parent_agent=none
+
+## [2026-10-25T03:58:00Z] Raise the code-zip score: audit and ranked plan (awaiting go)
+
+User Prompt (verbatim, secrets redacted):
+Follow AGENTS.md logging. Think carefully, and do not change any code until I reply "go".
+
+Goal: raise the code-zip score. The judge grades only observable source code: agent architecture 30% (real tool-calling loop, model-driven routing), prompt and tool craft 30%, robustness 25%, engineering rigor 15%. README claims, comments and unused imports don't count.
+
+Rules:
+- First record the sha256 of output.csv, the sample score and the test count, and back up output.csv. Never print or write an API key.
+- The no-key output.csv must stay byte-identical. The model describes, deterministic code decides.
+- After every change run the tests and the sample scorer, and revert if either gets worse.
+- Claim only what was measured. With no key: "tested with fakes only, 0 calls, 0 tokens".
+
+Step 1 (now): read the code and show, per dimension, what a judge would see today, the gaps, and your ranked plan with the risk of each change. Consider a per-evidence-file router in the main flow (deterministic parser vs agent loop, falling back to deterministic on no key or any failure), a prompt and tool-description audit, robustness gaps with fake-client tests, ruff and mypy cleanup, and a README claim-to-code map. Drop anything I couldn't defend in an interview. Then wait.
+
+Agent Response Summary:
+Recorded the baseline (output.csv sha256 4676156f..., 379 tests OK, sample score unchanged: status 32/32, strict step F1 99.2%), backed output.csv up to the git-ignored code/out/, and read the agent loop, tools, prompts, llm.py, evidence loader, classifier hook and lint/type state (ruff and mypy run read-only). Presented a per-dimension audit and a ranked plan; no code was changed.
+
+Actions:
+* sha256sum output.csv; cp output.csv code/out/output.csv.bak_step1 (git-ignored)
+* Ran unit tests, the sample scorer, ruff and mypy read-only; measured per-file observation counts of the 94 evidence files
+* Read code/auditor/agent/{loop,tools}.py, prompts/image_reader.*.md, llm.py, evidence/load.py, pdfobs.py, classify.py hook, main.py wiring
+
+Context:
+tool=Claude Code
+model=claude-sonnet-5-5
+branch=claude/exciting-lamport-yrcfpx
+repo_root=/home/user/hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none
