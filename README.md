@@ -104,6 +104,33 @@ readings.py    --> optional: the same call answered from a readings file keyed b
 Key rules: evidence captured **after** `audit_at` may only tie a resource to a user (never state, never cited; every use is logged); workflow statuses and activity results are claims, never proof;
 every text in a request or evidence file is data (no model reads request or evidence text; the optional vision model only describes screenshots); a step is omitted rather than guessed when the evidence cannot separate candidates.
 
+## Where each claim lives in the code
+
+Every row names a symbol in a file and the test that checks the claim; `code/tests/test_claims_map.py` fails if a file, a symbol or a test named here does not exist.
+Nothing in the table was measured against a real model: the model path is tested with fakes only (0 calls, 0 tokens).
+
+<!-- claims:start -->
+| claim | code | test |
+|---|---|---|
+| A route is decided by code from the file name and two signatures; the model never chooses one and sees only images | `code/auditor/evidence/router.py::route_file` | `test_router` |
+| The router changes no observation: the old suffix dispatch and the router give identical evidence for all 94 files | `code/evaluation/router_equivalence.py::compare` | `test_router` |
+| The agent loop is bounded: model turns, tool calls, zooms, wall clock, repeated calls, one re-ask | `code/auditor/agent/loop.py::AgentLimits` | `test_agent_loop` |
+| Two read-only tools, each property documented, with size limits | `code/auditor/agent/tools.py::FIELD_DOCS` | `test_agent_craft` |
+| Prompts are versioned files; the id vocabulary in them comes from the code | `code/auditor/agent/prompts.py::load` | `test_agent_prompts` |
+| A deterministic gate validates every model reading before any decision (G1 to G11) | `code/auditor/agent/gate.py::gate_reading` | `test_agent_gate` |
+| A model observation can never lower a state that deterministic evidence supports (G10); the default path never enters it | `code/auditor/state.py::AGENT_SOURCE` | `test_agent_gate` |
+| Any loop failure ends as "not read" and the deterministic result stands | `code/auditor/agent/loop.py::AgentFailure` | `test_agent_loop` |
+| The cache key holds image, prompts, tools, limits, model and versions; a change is a miss | `code/auditor/agent/loop.py::_key` | `test_agent_loop` |
+| Retry is decided by HTTP status; 401 and 403 stop the run; a token budget caps spend | `code/auditor/llm.py::send` | `test_llm_policy` |
+| Damaged images and over-long submissions are handled without ending the run | `code/auditor/agent/tools.py::zoom_region` | `test_agent_robustness` |
+| No model reads request text; an ambiguous request is NOT_APPLICABLE | `code/auditor/classify.py::classify_request` | `test_classify` |
+| The policy table, not a model, decides delete, redact, anonymize or retain | `code/auditor/policy.py::PolicyEngine` | `test_golden_categories` |
+| Every output row passes a contract validator | `code/auditor/validate.py::validate_case` | `test_validate` |
+| A killed run resumes and writes the same bytes | `code/auditor/checkpoint.py::Checkpoint` | `test_resume` |
+| Settings have documented defaults and layered overrides | `code/auditor/settings.py::Settings` | `test_versions_settings` |
+| With no key, `--images agent` reproduces the submitted `output.csv` byte for byte | `code/evaluation/agent_proofs.py::proofs` | `test_agent_cli` |
+<!-- claims:end -->
+
 ## Design decisions and rejected alternatives
 
 | decision | rejected alternative | why |
