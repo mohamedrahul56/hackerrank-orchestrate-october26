@@ -3,7 +3,7 @@
 # Precedence (low -> high): built-in defaults < this file < environment (AUDITOR_VLM_MODEL, AUDITOR_VLM_FALLBACK_MODEL, AUDITOR_CACHE_DIR)
 #                           < command line (--config FILE to use another file, --set section.key=value to override one value,
 #                             or the dedicated flags such as --no-discovery).
-# Unknown sections/keys and wrongly typed values stop the run with an error. Run `python3 code/main.py --show-settings` to see the effective values.
+# Unknown sections/keys and wrongly typed values stop the run with an error. Run `dotnet run -c Release --project code/src/Auditor.Cli -- --show-settings` to see the effective values.
 #
 # Settings that can change the answer (everything except cache_dir, max_concurrency and timeout_seconds) are hashed into the run stamp in output.notes.md and into the
 # resume key of a checkpointed run, so results of one setting are never reused for another.
@@ -44,7 +44,7 @@ later_link_max_days = 7
 # a readings file instead of a model (provider "file" in the usage log); agent = the bounded tool-calling reader of auditor/agent (needs a key; see [agent]).
 # The key itself is never a setting.
 images = "auto"
-# Where the readings come from with images = "file" ("" = code/out/agent_readings.json). A JSON file keyed by the sha256 of each PNG; see auditor/readings.py.
+# Where the readings come from with images = "file" ("" = code/out/agent_readings.json). A JSON file keyed by the sha256 of each PNG; see code/src/Auditor/Readings.cs.
 readings_file = ""
 # Vision model that reads the screenshots (env: AUDITOR_VLM_MODEL).
 model = "claude-haiku-5-5"
@@ -68,7 +68,7 @@ max_run_tokens = 0
 max_iterations = 5
 # Tool calls per screenshot (the final submit counts).
 max_tool_calls = 6
-# zoom_region calls per screenshot (needs Pillow; without it the tool is not offered and a warning is logged).
+# zoom_region calls per screenshot (cropped with SkiaSharp; if an image cannot be decoded the call returns a tool error the model hears about).
 max_zooms = 4
 # Wall-clock budget per screenshot, in seconds.
 wall_seconds = 120.0

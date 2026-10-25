@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Auditor\Auditor.csproj" />
+    <ProjectReference Include="..\..\src\Auditor.Cli\Auditor.Cli.csproj" />
+  </ItemGroup>
+
+</Project>

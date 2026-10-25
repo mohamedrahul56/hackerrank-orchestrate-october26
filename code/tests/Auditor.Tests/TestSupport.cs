@@ -1,0 +1,171 @@
+global using System.Diagnostics;
+global using Auditor.Evidence;
+global using Auditor.Agent;
+global using Auditor.Tools;
+using System.Text;
+
+[assembly: CollectionBehavior(DisableTestParallelization = true)]          // tests change environment variables and the working directory: one after another
+
+namespace Auditor.Tests;
+
+/// <summary>Paths and helpers shared by the tests. Tests that need the real dataset skip themselves when <c>dataset/</c> is absent (it is deliberately not shipped in code.zip).</summary>
+public static class Repo
+{
+    public static readonly string Root = FindRoot();
+    public static string Dataset => Path.Combine(Root, "dataset");
+    public static string Code => Path.Combine(Root, "code");
+    public static bool HasDataset => File.Exists(Path.Combine(Dataset, "sample_output.csv"));
+
+    private static string FindRoot()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+            if (File.Exists(Path.Combine(dir.FullName, "code", "Auditor.sln"))) return dir.FullName;
+        throw new InvalidOperationException("repository root not found");
+    }
+
+    public static string Read(string relative) => File.ReadAllText(Path.Combine(Root, relative), new UTF8Encoding(false));
+}
+
+/// <summary>A fact that skips itself when the real dataset is not present.</summary>
+public sealed class DatasetFactAttribute : FactAttribute
+{
+    public DatasetFactAttribute() { if (!Repo.HasDataset) Skip = "dataset/ not present"; }
+}
+
+/// <summary>A scratch directory that is removed when disposed.</summary>
+public sealed class TempDir : IDisposable
+{
+    public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "auditor-test-" + Guid.NewGuid().ToString("N"));
+    public TempDir() => Directory.CreateDirectory(Path);
+    public string File(string name) => System.IO.Path.Combine(Path, name);
+    public string Write(string name, string text)
+    {
+        var p = File(name);
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(p)!);
+        System.IO.File.WriteAllText(p, text, new UTF8Encoding(false));
+        return p;
+    }
+    public void Dispose() { try { Directory.Delete(Path, true); } catch (IOException) { } }
+}
+
+public static class Run
+{
+    /// <summary>Runs the command line in-process; returns (exit code, stdout, stderr).</summary>
+    public static (int Code, string Out, string Err) Cli(params string[] args)
+    {
+        var o = new StringWriter(); var e = new StringWriter();
+        var code = Auditor.Cli.Cli.Run(args, o, e);
+        return (code, o.ToString(), e.ToString());
+    }
+}
+
+/// <summary>Sets environment variables for the lifetime of the object and restores them afterwards (tests run one after another, see xunit.runner.json).</summary>
+public sealed class EnvScope : IDisposable
+{
+    private readonly Dictionary<string, string?> old = new();
+
+    public EnvScope Set(string name, string? value)
+    {
+        if (!old.ContainsKey(name)) old[name] = Environment.GetEnvironmentVariable(name);
+        Environment.SetEnvironmentVariable(name, value);
+        return this;
+    }
+
+    /// <summary>No price file, no API key: the state of a machine that has never been configured.</summary>
+    public static EnvScope Clean() => new EnvScope().Set("ANTHROPIC_API_KEY", null).Set("ANTHROPIC_AUTH_TOKEN", null).Set("AUDITOR_PRICES_FILE", "/nonexistent/prices.json")
+        .Set("AUDITOR_USAGE_LOG", null).Set("AUDITOR_CACHE_DIR", null).Set("AUDITOR_VLM_MODEL", null).Set("AUDITOR_VLM_FALLBACK_MODEL", null);
+
+    public void Dispose() { foreach (var (k, v) in old) Environment.SetEnvironmentVariable(k, v); }
+}
+
+/// <summary>A model client that plays back a script: each entry is a <see cref="ModelResponse"/> to return or an exception to throw. Every request is recorded.</summary>
+public sealed class FakeModelClient : IModelClient
+{
+    private readonly Queue<object> script;
+    private readonly object gate = new();
+    public List<ModelRequest> Calls { get; } = new();
+    public List<TimeSpan> Timeouts { get; } = new();
+
+    public FakeModelClient(IEnumerable<object> script) => this.script = new Queue<object>(script);
+
+    public ModelResponse Create(ModelRequest request, TimeSpan timeout)
+    {
+        object next;
+        lock (gate)
+        {
+            Calls.Add(request);
+            Timeouts.Add(timeout);
+            if (script.Count == 0) throw new InvalidOperationException("the fake model client ran out of scripted replies");
+            next = script.Dequeue();
+        }
+        return next is Exception e ? throw e : (ModelResponse)next;
+    }
+
+    public static ModelResponse Reply(object jsonOrText, long input = 100, long output = 50, string stop = "end_turn") =>
+        new(stop, new ContentBlock[] { new TextBlock(jsonOrText as string ?? Compat.DumpsCompact(jsonOrText)) }, new ModelUsage(input, output, 0));
+
+    public static ModelResponse Empty(long input = 100, long output = 20) => new("end_turn", Array.Empty<ContentBlock>(), new ModelUsage(input, output, 0));
+
+    public static ModelApiException Status(int code, double retryAfter = 0) => new($"HTTP {code}", code, "Other", retryAfter);
+}
+
+public static class Samples
+{
+    /// <summary>A reading the single-shot image reader would produce for a connector console.</summary>
+    public static Dictionary<string, object?> Good() => (Dictionary<string, object?>)Compat.ParseJson(
+        "{\"screen\": \"connector console\", \"records\": [" +
+        "{\"resource_id\": \"data_flow_1121\", \"selected\": true, \"emails\": [\"aditi.example@example.test\"], \"user_ids\": [], \"phones\": [], \"status_words\": [\"Healthy\", \"Continuous\"], \"shows_direct_identifiers\": true, \"aliases\": []}," +
+        "{\"resource_id\": \"Order notifications\", \"selected\": false, \"emails\": [], \"user_ids\": [], \"phones\": [], \"status_words\": [], \"shows_direct_identifiers\": false, \"aliases\": []}]}")!;
+
+    public static readonly byte[] PngBytes = { 0x89, (byte)'P', (byte)'N', (byte)'G', (byte)' ', (byte)'f', (byte)'a', (byte)'k', (byte)'e' };
+}
+
+/// <summary>Runs the real command-line program in a child process (needed to kill it, and to vary the environment).</summary>
+public static class Proc
+{
+    public static string CliDll => Path.Combine(AppContext.BaseDirectory, "Auditor.Cli.dll");
+
+    public static ProcessStartInfo Start(IEnumerable<string> args, string? cwd = null, IDictionary<string, string?>? env = null)
+    {
+        var psi = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, WorkingDirectory = cwd ?? Repo.Root };
+        psi.ArgumentList.Add(CliDll);
+        foreach (var a in args) psi.ArgumentList.Add(a);
+        foreach (var k in new[] { "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "AUDITOR_TEST_PAUSE_AFTER", "AUDITOR_USAGE_LOG" }) psi.Environment.Remove(k);
+        foreach (var (k, v) in env ?? new Dictionary<string, string?>())
+        {
+            if (v is null) psi.Environment.Remove(k); else psi.Environment[k] = v;
+        }
+        return psi;
+    }
+
+    public static (int Code, string Out, string Err) Run(IEnumerable<string> args, string? cwd = null, IDictionary<string, string?>? env = null)
+    {
+        using var p = Process.Start(Start(args, cwd, env))!;
+        var o = p.StandardOutput.ReadToEndAsync(); var e = p.StandardError.ReadToEndAsync();
+        p.WaitForExit();
+        return (p.ExitCode, o.Result, e.Result);
+    }
+}
+
+public static class TestPng
+{
+    /// <summary>A small deterministic PNG (a grid of coloured dots on a light background).</summary>
+    public static string Make(string path, int w = 400, int h = 300)
+    {
+        using var bmp = new SkiaSharp.SKBitmap(w, h);
+        bmp.Erase(new SkiaSharp.SKColor(250, 250, 250));
+        for (int x = 0; x < w; x += 10)
+            for (int y = 0; y < h; y += 10)
+                bmp.SetPixel(x, y, new SkiaSharp.SKColor((byte)(x * 7 % 256), (byte)(y * 5 % 256), 90));
+        using var image = SkiaSharp.SKImage.FromBitmap(bmp);
+        using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+        File.WriteAllBytes(path, data.ToArray());
+        return path;
+    }
+
+    public static (int W, int H) Decode(byte[] png)
+    {
+        using var bmp = SkiaSharp.SKBitmap.Decode(png);
+        return (bmp.Width, bmp.Height);
+    }
+}

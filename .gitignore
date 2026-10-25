@@ -1,16 +1,18 @@
+# secrets and local configuration
 .env
-__pycache__/
-*.pyc
-.venv/
-venv/
-node_modules/
+code/config/prices.json
+
+# build output
+bin/
+obj/
+TestResults/
+*.user
+.vs/
+
+# generated at run time
 code.zip
 code/.cache/
-.mypy_cache/
-.ruff_cache/
 code/out/
-code/config/prices.json
-agent-trace/
-agent-trace.zip
 *.usage.jsonl
 *.partial.jsonl
+
