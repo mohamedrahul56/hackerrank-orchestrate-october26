@@ -38,6 +38,7 @@ There is no rule for request text: the model is not used on request text (all 55
 |---|---|---|---|
 | default run (no `--images agent`) | = submitted output.csv `4676156f...` | `4676156f...` (exit 0) | **OK** |
 | `--images agent` without a key (every screenshot 'not read') | = submitted `4676156f...` | `4676156f...` (exit 0) | **OK** |
+| per-file router vs the old suffix dispatch (observations, coverage, warnings), three configurations | identical for every manifest file | 94 files, 2895 observations: identical | **OK** |
 | scripted replay of the 11 readings through the loop and gate (fake client: one zoom + one submit per screenshot) | = the run that takes the same readings from a file `f86e7d6f...` | `f86e7d6f...` (exit 0, 0; 22 fake calls) | **OK** |
 
 Rule G10 is applied only to model-sourced observations, so the default path is byte-identical by construction: `state.resolve` enters the G10 branch only when the chosen observation has the source `image:agent`, which no other code path creates. `tests/test_agent_gate.py` also compares `resolve` with a copy of the previous code on 2,000 random observation sets without such a source.
@@ -51,7 +52,8 @@ Rule G10 is applied only to model-sourced observations, so the default path is b
 | `test_agent_tools` | 10 | 0 | 0 |
 | `test_agent_loop` | 30 | 0 | 0 |
 | `test_agent_cli` | 7 | 0 | 0 |
-| **all** | **69** | **0** | **0** |
+| `test_router` | 13 | 0 | 0 |
+| **all** | **82** | **0** | **0** |
 
 Failure injection (`tests/test_agent_loop.py`): invalid submission (re-ask once, then the fallback model, then 'not read'), a tool input that is not an object, a reply without a tool call, a cut-off reply, an unknown tool, refusal on both models and on one, one timeout (retried) and timeouts every time, 429 with `Retry-After`, no key, iteration cap, tool-call cap, zoom cap, wall-clock budget, a bad zoom rectangle, the same call twice (answered from memory) and three times (ends the loop), a submission naming an evidence id, a screenshot outside the manifest, injection strings in every field, and a failed reading leaving the deterministic audit result untouched. `tests/test_agent_gate.py` adds accept/reject pairs for G1-G7, a 1,000-case fuzz, and the G10 cases.
 

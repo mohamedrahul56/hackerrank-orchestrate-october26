@@ -177,6 +177,8 @@ def _run(argv: list[str] | None = None) -> int:
              f"evidence warnings: {len(auditor.base.warnings)}", ""]
     notes += [f"* {w}" for w in auditor.base.warnings[:50]]
     notes += [f"* {w}" for w in auditor.res.warnings[:20]]
+    from auditor.evidence import router
+    notes += ["", "## Evidence routing (each manifest file: handler, reader, outcome; the model never chooses a route)", "", *router.summary_lines(auditor.base.routes), ""]
     if agent is not None:
         notes += ["", "## Agent layer (`--images agent`): what the gate did", "",
                   f"screenshots read: {agent.stats['read']}, loops that ended without a reading: {agent.stats['failed']}; limits {agent.limits}", ""]

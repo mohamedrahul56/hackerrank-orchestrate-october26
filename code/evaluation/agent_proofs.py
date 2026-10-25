@@ -91,6 +91,17 @@ def sha(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
 
+def router_row() -> tuple[str, str, str, str]:
+    """The per-file router against the frozen suffix dispatch it replaced, on every file of the manifest (no reader, a fake reader, a fake reader with 4 workers)."""
+    import router_equivalence as eq
+    dataset = ROOT / "dataset"
+    fake = lambda path, *a: {"screen": "s", "records": []}      # noqa: E731 - an image reader that returns an empty reading: the images are routed, nothing is invented
+    runs = [eq.compare(dataset, False), eq.compare(dataset, True, fake), eq.compare(dataset, True, fake, 4)]
+    same = all(not r["differences"] for r in runs)
+    return ("per-file router vs the old suffix dispatch (observations, coverage, warnings), three configurations", "identical for every manifest file",
+            f"{runs[0]['files']} files, {runs[0]['observations']} observations: " + ("identical" if same else "; ".join(d for r in runs for d in r["differences"])), "OK" if same else "DIFFERENT")
+
+
 def proofs() -> list[tuple[str, str, str, str]]:
     """(proof, expected, observed, verdict) rows, from live runs."""
     cli = load_cli()
@@ -104,6 +115,7 @@ def proofs() -> list[tuple[str, str, str, str]]:
         rows.append(("default run (no `--images agent`)", f"= submitted output.csv `{sub[:8]}...`", f"`{sha(d / 'default.csv')[:8]}...` (exit {rc1})", "OK" if sha(d / "default.csv") == sub else "DIFFERENT"))
         rows.append(("`--images agent` without a key (every screenshot 'not read')", f"= submitted `{sub[:8]}...`", f"`{sha(d / 'agent_nokey.csv')[:8]}...` (exit {rc2})",
                      "OK" if sha(d / "agent_nokey.csv") == sub else "DIFFERENT"))
+        rows.append(router_row())
         if LOCAL_READINGS.exists():
             readings = json.loads(LOCAL_READINGS.read_text(encoding="utf-8"))["readings"]
             with mock.patch.dict(os.environ, no_key_env(), clear=True):
@@ -117,7 +129,7 @@ def proofs() -> list[tuple[str, str, str, str]]:
     return rows
 
 
-TEST_MODULES = ["tests.test_agent_prompts", "tests.test_agent_gate", "tests.test_agent_tools", "tests.test_agent_loop", "tests.test_agent_cli"]
+TEST_MODULES = ["tests.test_agent_prompts", "tests.test_agent_gate", "tests.test_agent_tools", "tests.test_agent_loop", "tests.test_agent_cli", "tests.test_router"]
 
 
 def run_tests() -> list[tuple[str, int, int, int]]:

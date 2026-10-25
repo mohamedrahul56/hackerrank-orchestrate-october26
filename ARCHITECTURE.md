@@ -23,8 +23,9 @@ flowchart TD
     CLS -- "no" --> NA["NOT_APPLICABLE with steps_json = empty list"]
     CLS -- "yes" --> IDR["identity: request email to user and every identifier ever used"]
     IDT --> IDR
-    EVF --> PARSE["evidence parsers: SQL, JSON, logs, text, PDF"]
-    EVF -. "PNG screenshots, optional" .-> VLM["llm.py: vision model only describes, results cached"]
+    EVF --> ROUTE["evidence/router.py: one route per file, decided by code from name and first bytes"]
+    ROUTE --> PARSE["evidence parsers: SQL, JSON, logs, text, PDF"]
+    ROUTE -. "PNG screenshots only, when a reader is configured" .-> VLM["llm.py: vision model only describes, results cached"]
     VLM --> PARSE
     RDG["readings.py: a file of readings keyed by PNG hash, same validation and sanitising, optional"] -.-> PARSE
     AGT["agent/: bounded tool loop zoom_region and submit_reading, opt-in, fake-tested only"] --> GATE["agent/gate.py: G1 to G7"]
@@ -64,7 +65,7 @@ Reading the diagram: solid arrows carry data, dotted arrows carry configuration,
 | `auditor/classify.py` | clause-level decision whether the text asks for deletion (eight languages); access, correction, export, opt-out and refusals are `NOT_APPLICABLE` | looking at evidence |
 | `auditor/identity.py` | request email to user, plus every email, hash and phone the user has ever had (current snapshot and audit log) | name or fuzzy matching |
 | `auditor/dataset.py` | typed, lenient CSV loading; a bad row is reported, never fatal | |
-| `auditor/evidence/*` | one parser per format into uniform observations; `load.py` walks the manifest in order; `imageobs.py` turns a validated screenshot reading into observations; `imagejobs.py` runs the screenshot reads concurrently and replays them in manifest order | judging compliance |
+| `auditor/evidence/*` | one parser per format into uniform observations; `router.py` decides, per manifest file, the handler and who reads it (a deterministic parser, or the screenshot reader for PNGs only and only when one is configured; the model never chooses a route); `load.py` walks the manifest in order and runs each route; `imageobs.py` turns a validated screenshot reading into observations; `imagejobs.py` runs the screenshot reads concurrently and replays them in manifest order | judging compliance |
 | `auditor/readings.py` | a readings FILE (JSON keyed by the sha256 of each PNG) that answers the same call as `llm.py`: the same schema validation, the same downstream sanitising, provider `file` in the usage log; used only with `--images file` | making a reading up for an image whose hash is not in the file |
 | `auditor/agent/` (`loop.py`, `tools.py`, `gate.py`, `prompts.py`), `code/prompts/*.md` | the opt-in screenshot reader: a bounded loop (5 turns, 6 tool calls, 4 zooms, 120 s) with two read-only tools, versioned prompt files, a deterministic gate (schema, manifest-bound evidence id, id shape, vocabulary, identifiers, unknown fields), fallback to "not read" on any failure; observations tagged `image:agent` | deciding anything; using the model on request text; any lookup tool |
 | `auditor/llm.py` | the only module that talks to a model: schema validation, one re-ask, fallback model, backoff with `Retry-After`, shared pause after a 429, per-request timeout, on-disk cache keyed by image, prompt text, model, schema, pipeline version and rules digest, usage log | prices (they come from `config/prices.json`, never from code) |
