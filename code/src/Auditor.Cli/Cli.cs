@@ -127,8 +127,12 @@ public static class Cli
         }
     }
 
+    /// <summary>Test seam: a model client (a fake) used instead of the real SDK client, for the current async flow only.</summary>
+    public static readonly AsyncLocal<IModelClient?> ModelClientOverride = new();
+
     private static Llm MakeLlm(Settings st, VersionStamp stamp, string usagePath) =>
-        new(cacheDir: st.CacheDir.Length > 0 ? st.CacheDir : null, usagePath: usagePath, model: st.Model, fallbackModel: st.FallbackModel, stamp: stamp, timeoutS: st.TimeoutSeconds, maxRunTokens: st.MaxRunTokens);
+        new(cacheDir: st.CacheDir.Length > 0 ? st.CacheDir : null, usagePath: usagePath, client: ModelClientOverride.Value, model: st.Model, fallbackModel: st.FallbackModel, stamp: stamp,
+            timeoutS: st.TimeoutSeconds, sleep: ModelClientOverride.Value is null ? null : _ => { }, maxRunTokens: st.MaxRunTokens);
 
     private static FileReadings FileReadingsSource(Settings st, string usagePath, string root) =>
         new(st.ReadingsFile.Length > 0 ? st.ReadingsFile : Path.Combine(root, "code", "out", "agent_readings.json"), new UsageLog(usagePath));

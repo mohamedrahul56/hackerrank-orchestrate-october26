@@ -8,6 +8,7 @@ namespace Auditor.Tools;
 ///   ... -- package [--dry-run] [--require-final]      builds code.zip after checking every submission rule
 ///   ... -- usage-report [--final]                     model usage report from the usage log of the last run
 ///   ... -- final-check [--build-zip] [--expect-log-turns N]
+///   ... -- show-readings [--text] [--only FILE_ID ...]   screenshots next to what the model read (needs ANTHROPIC_API_KEY in the environment)
 ///   ... -- extra-cases                                writes evaluation/extra_cases.md and extra_cases_results.md
 ///   ... -- evaluation-report                          writes evaluation/evaluation_report.md from live measurements
 /// </summary>
@@ -29,6 +30,7 @@ public static class Program
             "usage-report" => UsageReport.Run(rest, stdout, stderr),
             "final-check" => FinalCheck.Run(rest, stdout, stderr),
             "extra-cases" => ExtraCases.Run(rest, stdout, stderr),
+            "show-readings" => ShowReadings.Run(rest, stdout, stderr),
             _ => Unknown(args[0], stderr),
         };
     }

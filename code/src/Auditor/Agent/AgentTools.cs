@@ -162,7 +162,11 @@ public static class AgentTools
             if (x < 0 || y < 0 || x + w > W || y + h > H) throw new ToolException($"the rectangle ({x}, {y}, {w} x {h}) is not inside the screenshot ({W} x {H} pixels)");
             if ((long)w * h > MaxPixels) throw new ToolException("the rectangle is too large; zoom into a smaller area");
             if ((long)W * H > MaxImagePixels) throw new ToolException($"DecompressionBombError: the screenshot has {(long)W * H} pixels");
-            using var full = SKBitmap.Decode(path) ?? throw new ToolException("the screenshot could not be decoded");
+            using var codec = SKCodec.Create(path) ?? throw new ToolException("the screenshot cannot be cropped (it could not be decoded); read it as it is and call submit_reading");
+            using var full = new SKBitmap(codec.Info);
+            var decoded = codec.GetPixels(full.Info, full.GetPixels());
+            if (decoded != SKCodecResult.Success)                       // a truncated or corrupt file decodes only in part: that is a tool error, not a half image
+                throw new ToolException($"the screenshot cannot be cropped ({decoded}); read it as it is and call submit_reading");
             using var crop = new SKBitmap();
             if (!full.ExtractSubset(crop, new SKRectI(x, y, x + w, y + h))) throw new ToolException("the screenshot could not be cropped");
             double scale = Math.Min(maxPx / (double)Math.Max(w, h), 4.0);
