@@ -37,6 +37,7 @@ public static class Program
             "performance-report" => PerformanceReport.Run(rest, stdout, stderr),
             "mutation-check" => MutationCheck.Run(rest, stdout, stderr),
             "perf-run" => PerformanceReport.Run(args, stdout, stderr),
+            "edge-sweep" => EdgeSweep.Run(rest, stdout, stderr),
             _ => Unknown(args[0], stderr),
         };
     }

@@ -237,9 +237,13 @@ public static class EvaluationReport
         L.AddRange(new[]
         {
             "", "The gate rule that can change a state, G10 (a model reading cannot lower the severity of a state that deterministic evidence supports), is applied only to model-sourced observations, so the default path is byte-identical by construction.", "",
-            "### 5.6 Edge-case regressions", "",
-            "Awkward inputs (empty or missing fields, bad timestamps, duplicate or unknown ids, corrupt evidence, corrupt PNGs, prompt injection) are exercised by `EdgeRegressionsTests`, `RobustnessTests` and `ExtraCasesTests`. An earlier sweep of 118 hand-written scenarios, run on the original Python implementation, found **8 defects**, all fixed; each has a regression test in `EdgeRegressionsTests.cs` (row 44 of the change log).", "",
+            "### 5.6 Edge-case sweep", "",
+            "The edge-case sweep (`Auditor.Tools edge-sweep`, `EdgeSweep*.cs`) runs the real pipeline, as a library and as the command line, on small synthetic datasets that each isolate one awkward input (empty or missing fields, bad timestamps, duplicate or unknown ids, e-mail spelling, old e-mails, several requests per user, events after audit_at, failed-but-claimed-success operations, resources without an identifier, shared reported_at, retained records with extra identifiers, expired legal holds, corrupt or missing evidence, corrupt PNGs, prompt injection). Every scenario states its expected behaviour in words before the run; the full table (scenario, expected, observed, verdict) is `code/evaluation/edge_case_sweep.md`. The regression tests for the defects it found are in `EdgeRegressionsTests.cs`.", "",
         });
+        var sweepFile = Path.Combine(outDir, "edge_case_sweep.md");
+        var totals = File.Exists(sweepFile) ? Regex.Match(File.ReadAllText(sweepFile), @"^Totals: .*$", RegexOptions.Multiline) : Match.Empty;
+        L.Add(totals.Success ? totals.Value : "(edge_case_sweep.md has not been generated yet: run `make edge`)");
+        L.Add("");
 
         // ------------------------------------------------------------------ 6. provisional rows
         L.AddRange(new[]

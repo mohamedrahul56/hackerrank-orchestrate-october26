@@ -20,6 +20,7 @@ make test                       # the whole xUnit suite; needs no key and no net
 make run                        # all 518 requests -> ./output.csv  (+ output.notes.md, output.usage.jsonl)
 make score                      # the 32 labeled sample requests and the score report
 make explain CASE=case_48       # how one case got its answer; read-only, writes nothing
+make edge                       # the 118-scenario edge-case sweep (empty fields, bad times, corrupt files, injection ...) -> code/evaluation/edge_case_sweep.md
 make agent                      # no-change proofs and fake-client tests of the opt-in agent layer -> code/evaluation/agent_layer_report.md
 make reports                    # regenerate the evaluation, baseline, extra-case and agent reports (runs the tests first)
 make bench                      # performance report at 1x ... 40x the requests -> code/evaluation/performance_report.md
@@ -30,7 +31,7 @@ make check                      # build code.zip and run the final submission ch
 
 `make` alone lists the targets. Without `make` (for example on Windows) run the command each target wraps; they are the first lines of the `Makefile`:
 `dotnet build code/Auditor.sln -c Release`, `dotnet test code/Auditor.sln -c Release`, `dotnet run -c Release --project code/src/Auditor.Cli --` (the command line, all options below),
-`dotnet run -c Release --project code/tools/Auditor.Tools -- <command>` (the tools: `score`, `package`, `final-check`, `usage-report`, `evaluation-report`, `baselines`, `extra-cases`, `agent-proofs`, `performance-report`, `mutation-check`, `show-readings`).
+`dotnet run -c Release --project code/tools/Auditor.Tools -- <command>` (the tools: `score`, `package`, `final-check`, `usage-report`, `evaluation-report`, `baselines`, `extra-cases`, `edge-sweep`, `agent-proofs`, `performance-report`, `mutation-check`, `show-readings`).
 Design, failure modes and measured performance: [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ## Setup and run
@@ -153,7 +154,7 @@ Nothing in the table was measured against a real model: the model path is tested
 
 Labeled samples (32): status 32/32, step precision 100%, recall 98.4%, step F1 99.2%; the 9 cases not tuned against in Phase 2-3: status 9/9, F1 100%. Main set (518, no labels):
 COMPLETE 152, INCOMPLETE 356, NOT_APPLICABLE 10. 23 synthetic cases (`code/evaluation/extra_cases.md`) pass. Model usage in the final run: 0 calls (`code/evaluation/usage_report.md`).
-An earlier sweep of 118 hand-written edge-case scenarios found 8 real defects, all fixed; each has a regression test in `EdgeRegressionsTests`.
+Edge-case sweep (`code/evaluation/edge_case_sweep.md`, `make edge`): 118 scenarios, 116 OK and 2 documented decisions; its first run (on the earlier Python code) found 8 real defects, all fixed with regression tests in `EdgeRegressionsTests`.
 The 32 labels were all read in Phase 0 to infer the rules, so none of these numbers is an independent test.
 
 ## Known weaknesses (honest list)

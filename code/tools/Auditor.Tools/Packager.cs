@@ -25,7 +25,7 @@ public static class Packager
     };
     public static readonly string[] FinalRequired =
     {
-        "code/evaluation/evaluation_report.md", "code/evaluation/usage_report.md", "code/evaluation/performance_report.md", "code/evaluation/agent_layer_report.md",
+        "code/evaluation/evaluation_report.md", "code/evaluation/usage_report.md", "code/evaluation/performance_report.md", "code/evaluation/edge_case_sweep.md", "code/evaluation/agent_layer_report.md",
     };
     public const long MaxFileBytes = 5_000_000;
 

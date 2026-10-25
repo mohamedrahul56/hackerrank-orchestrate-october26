@@ -9,7 +9,7 @@ CLI    := dotnet run --no-build -c $(CONFIG) --project code/src/Auditor.Cli --
 TOOLS  := dotnet run --no-build -c $(CONFIG) --project code/tools/Auditor.Tools --
 
 .DEFAULT_GOAL := help
-.PHONY: help setup build test run score explain agent reports bench mutation package check clean
+.PHONY: help setup build test run score explain edge agent reports bench mutation package check clean
 
 help:
 	@echo "make setup            restore the NuGet packages (the .NET 10 SDK is the only prerequisite)"
@@ -18,6 +18,7 @@ help:
 	@echo "make run              answer all 518 requests: writes ./output.csv, ./output.notes.md, ./output.usage.jsonl"
 	@echo "make score            run the 32 labeled sample requests and print the score report"
 	@echo "make explain CASE=case_48   print how one case got its answer (read-only, writes nothing)"
+	@echo "make edge             run the 118-scenario edge-case sweep and write code/evaluation/edge_case_sweep.md"
 	@echo "make agent            run the no-change proofs of the opt-in agent layer -> code/evaluation/agent_layer_report.md"
 	@echo "make reports          regenerate evaluation_report.md, extra_cases_results.md, baseline_results.md, agent_layer_report.md (runs the tests first)"
 	@echo "make bench            performance report at 1x ... 40x the requests (a few minutes) -> code/evaluation/performance_report.md"
@@ -48,12 +49,16 @@ explain: build
 	@test -n "$(CASE)" || { echo "usage: make explain CASE=case_48" >&2; exit 2; }
 	$(CLI) --explain $(CASE)
 
+edge: build
+	$(TOOLS) edge-sweep
+
 agent: build
 	$(TOOLS) agent-proofs
 
 reports: test
 	$(TOOLS) baselines
 	$(TOOLS) extra-cases
+	$(TOOLS) edge-sweep
 	$(TOOLS) agent-proofs
 	$(TOOLS) evaluation-report
 

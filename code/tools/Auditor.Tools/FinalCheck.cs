@@ -105,7 +105,7 @@ public static class FinalCheck
         Add("provisional rows are flagged in `output.notes.md`", File.Exists(notes), $"{prov.Count}: {string.Join(", ", prov)}");
 
         var ev = Path.Combine(root, "code", "evaluation");
-        foreach (var name in new[] { "evaluation_report.md", "usage_report.md", "performance_report.md", "agent_layer_report.md" })
+        foreach (var name in new[] { "evaluation_report.md", "usage_report.md", "performance_report.md", "edge_case_sweep.md", "agent_layer_report.md" })
         {
             var p = Path.Combine(ev, name);
             var problems = File.Exists(p) ? MarkdownCheck.Problems(p) : new List<string>();
@@ -135,7 +135,7 @@ public static class FinalCheck
             catch (InvalidDataException) { names = new(); zipOk = false; }
             Add("`code.zip` exists, is a valid archive and its names equal the checked file list", zipOk && names.OrderBy(n => n, StringComparer.Ordinal).SequenceEqual(files.Select(p => Packager.Rel(p, root)).OrderBy(n => n, StringComparer.Ordinal)),
                 $"{names.Count} files, {new FileInfo(zpath).Length / 1024} KiB");
-            string[] must = { "README.md", "ARCHITECTURE.md", "Makefile", "code/evaluation/evaluation_report.md", "code/evaluation/usage_report.md", "code/evaluation/performance_report.md",
+            string[] must = { "README.md", "ARCHITECTURE.md", "Makefile", "code/evaluation/evaluation_report.md", "code/evaluation/usage_report.md", "code/evaluation/performance_report.md", "code/evaluation/edge_case_sweep.md",
                               "code/evaluation/agent_layer_report.md", "code/prompts/image_reader.system.md", "code/evaluation/extra_cases.md" };
             Add("`code.zip` has no `dataset/`, `.env`, `prices.json`, `code/out/`, build output, nested archive; has README.md, ARCHITECTURE.md, Makefile, the reports, extra_cases.md",
                 !names.Any(n => n.StartsWith("dataset/", StringComparison.Ordinal) || n.Split('/')[^1].StartsWith(".env", StringComparison.Ordinal) || n.EndsWith("/prices.json", StringComparison.Ordinal)
