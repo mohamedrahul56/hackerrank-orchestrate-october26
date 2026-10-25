@@ -7,7 +7,6 @@ owned it at `requested_at`), and emails that match nobody or several users.
 """
 from __future__ import annotations
 
-import csv
 import hashlib
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -77,31 +76,31 @@ class IdentityResolver:
                 continue
             changes[r["user_id"]].append(r)
         for uid, rows in changes.items():
-            p = self.people.get(uid)
-            if p is None:
+            person = self.people.get(uid)
+            if person is None:
                 continue
             rows.sort(key=lambda r: r["event_time"])
             email_rows = [r for r in rows if r["field_name"] == "email"]
             for r in rows:
                 if r["field_name"] == "email_hash":
-                    p.hashes |= {r["old_value"].lower(), r["new_value"].lower()}
+                    person.hashes |= {r["old_value"].lower(), r["new_value"].lower()}
                 elif r["field_name"] == "phone":
-                    p.phones |= {x for x in (norm_phone(r["old_value"]), norm_phone(r["new_value"])) if x}
+                    person.phones |= {x for x in (norm_phone(r["old_value"]), norm_phone(r["new_value"])) if x}
             prev_until: datetime | None = None
             spans: list[tuple[str, datetime | None, datetime | None]] = []
             for r in email_rows:                                    # old email valid until the change time
                 when = parse_ts(r["event_time"])
                 spans.append((norm_email(r.get("old_value", "")), prev_until, when))
-                p.hashes.add(email_hash(r["old_value"])); p.hashes.add(email_hash(r["new_value"]))
+                person.hashes.add(email_hash(r["old_value"])); person.hashes.add(email_hash(r["new_value"]))
                 prev_until = when
-            spans.append((p.current_email, prev_until, None))
-            p.email_spans = spans
+            spans.append((person.current_email, prev_until, None))
+            person.email_spans = spans
         for p in self.people.values():
             if not p.email_spans:
                 # never changed its email: the identity snapshot's updated_at is the earliest time we can vouch for it
                 p.email_spans = [(p.current_email, p.updated_at, None)]
-            for e in p.emails:
-                self._by_email[e].append(p)
+            for address in p.emails:
+                self._by_email[address].append(p)
             for t in p.tokens():
                 self._token_users[t].add(p.user_id)
 

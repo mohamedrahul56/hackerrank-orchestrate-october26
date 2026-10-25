@@ -9,10 +9,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import DATASET, ROOT, needs_dataset
 import extra_cases as xc
 from auditor.audit import Auditor, Config
-from auditor.dataset import DatasetError, load_dataset
+from auditor.dataset import load_dataset
 from auditor.evidence import imageobs
 from auditor.evidence.records import EvidenceBase, support_message_state
 from auditor.llm import LLM, LLMUnavailable, SchemaError
@@ -232,7 +232,7 @@ class ModelFailures(unittest.TestCase):
 
     def test_corrupt_cache_entry_is_just_a_miss(self):
         llm = self.llm([reply(GOOD)])
-        key = llm._key(__import__("hashlib").sha256(self.img.read_bytes()).hexdigest(), imageobs.PROMPT_VERSION, llm.model, imageobs.SCHEMA)
+        key = llm.cache_key(__import__("hashlib").sha256(self.img.read_bytes()).hexdigest(), imageobs.PROMPT_VERSION, llm.model, imageobs.SCHEMA, imageobs.SYSTEM, imageobs.INSTRUCTION)
         (self.dir / "cache").mkdir()
         (self.dir / "cache" / f"{key}.json").write_text("{corrupt", encoding="utf-8")
         self.assertEqual(self.read(llm)["screen"], "connector console")
@@ -385,7 +385,6 @@ class ImagePathVariance(unittest.TestCase):
     """Cold cache -> warm cache -> cleared cache: same answer each time, one model call per image per cold run (fake client, no key needed)."""
 
     def test_cold_warm_and_cleared_cache_runs_agree(self):
-        import shutil
         with tempfile.TemporaryDirectory() as d:
             root, cache = Path(d) / "ds", Path(d) / "cache"
             ProvisionalRows().build(root, "Please delete my account and all my data.", [("evidence_91", "cache_admin_console", "2026-08-10T12:00:00Z")])

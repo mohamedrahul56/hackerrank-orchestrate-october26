@@ -52,7 +52,12 @@ def _record_obs(base: EvidenceBase, file_id: str, file_t: datetime, t: datetime,
         if rule is None or not rid:
             return
         category, state_fn = rule
-        until = parse_ts(rec["retained_until"]) if rec.get("retained_until") else None
+        until = None
+        if rec.get("retained_until"):
+            try:
+                until = parse_ts(str(rec["retained_until"]))
+            except ValueError:                                   # an unreadable end date is "no end date stated" (the hold stays active), not a lost record
+                base.warnings.append(f"{file_id}: {rid}: retained_until {str(rec['retained_until'])[:30]!r} is not a time; treated as no end date")
         base.obs.append(Obs(file_id, file_t, t, system or system_for(rid), rid, category, state_fn(rec),
                             idents_from(flatten(rec)), source, until=until))
     except (ValueError, KeyError, TypeError, AttributeError) as e:      # one malformed record must not cost the rest of the file
@@ -61,7 +66,6 @@ def _record_obs(base: EvidenceBase, file_id: str, file_t: datetime, t: datetime,
 
 def load_sql(base: EvidenceBase, file_id: str, path: Path, file_t: datetime) -> None:
     tables = read_sql_tables(path)
-    text = path.read_text(encoding="utf-8")
     for name, rows in tables.items():
         if name == "snapshot_scope":                               # inventory: which systems this snapshot covers
             for r in rows:

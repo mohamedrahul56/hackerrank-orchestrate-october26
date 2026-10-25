@@ -1,9 +1,8 @@
 import copy
-import json
 import unittest
 from collections import Counter
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import DATASET, needs_dataset
 from auditor.dataset import load_dataset
 from auditor.schema import canonicalize, make_step
 from auditor.validate import validate_case, validate_output_file, validate_rows

@@ -35,14 +35,31 @@ def usable(o: Obs, t0: datetime, audit_at: datetime) -> bool:
     return bool(o.state) and t0 <= o.file_t <= audit_at and o.t <= audit_at
 
 
-def resolve(observations: list[Obs], t0: datetime, audit_at: datetime) -> ResourceState | None:
-    obs = [o for o in observations if usable(o, t0, audit_at)]
-    if not obs:
-        return None
+AGENT_SOURCE = "image:agent"        # observations written by the model-driven screenshot reader (auditor/agent); no other source starts with this
+
+
+def _pick(obs: list[Obs]) -> Obs:
     latest_file_t = max(o.file_t for o in obs)
     in_file = [o for o in obs if o.file_t == latest_file_t]
     if all(o.source.startswith("log:") for o in in_file):          # a log is a timeline: the last event wins
         last_t = max(o.t for o in in_file)
         in_file = [o for o in in_file if o.t == last_t]
-    chosen = max(in_file, key=lambda o: SEVERITY.get(o.state, 0))  # tables of one snapshot: any copy that violates counts
+    return max(in_file, key=lambda o: SEVERITY.get(o.state, 0))    # tables of one snapshot: any copy that violates counts
+
+
+def resolve(observations: list[Obs], t0: datetime, audit_at: datetime, log: list[str] | None = None) -> ResourceState | None:
+    obs = [o for o in observations if usable(o, t0, audit_at)]
+    if not obs:
+        return None
+    chosen = _pick(obs)
+    if chosen.source == AGENT_SOURCE:
+        # Gate rule G10: a model reading may add a finding or confirm a state, but it cannot lower the severity of the state that deterministic evidence supports in the window.
+        # Entered only when a model-sourced observation was chosen, so a run without the agent layer never reaches this branch (byte-identical by construction).
+        det = [o for o in obs if not o.source.startswith("image:agent")]
+        if det:
+            base = _pick(det)
+            if SEVERITY.get(base.state, 0) > SEVERITY.get(chosen.state, 0):
+                if log is not None:
+                    log.append(f"G10 {chosen.resource}: the model reading in {chosen.file_id} says {chosen.state}, but {base.file_id} supports {base.state}: the supported state stays")
+                chosen = base
     return ResourceState(chosen.resource, chosen.system, chosen.category, chosen.state, chosen.file_id, chosen.file_t, chosen.t, chosen.source, chosen.until)

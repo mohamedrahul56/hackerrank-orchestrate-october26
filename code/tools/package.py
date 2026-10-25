@@ -17,7 +17,6 @@ from __future__ import annotations
 import argparse
 import csv
 import re
-import sys
 import zipfile
 from pathlib import Path
 
@@ -26,11 +25,11 @@ ROOT = Path(__file__).resolve().parents[2]
 ARCHIVE_EXT = {".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".7z", ".rar", ".jar", ".whl"}
 JUDGE_IGNORED_EXT = {".csv", ".tsv", ".json", ".jsonl", ".sql", ".log"}
 ALLOWED_IGNORED = {"code/config/prices.example.json"}
-EXCLUDED_DIRS = {"__pycache__", ".git", ".venv", "venv", "node_modules", ".cache", ".pytest_cache", ".mypy_cache"}
+EXCLUDED_DIRS = {"__pycache__", ".git", ".venv", "venv", "node_modules", ".cache", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
 EXCLUDED_PREFIXES = ("code/out/", "code/.cache/", "dataset/", "agent-trace", "output")
 EXCLUDED_NAMES = {".env", "prices.json", "log.txt", ".DS_Store"}
-REQUIRED = ["README.md", "code/main.py", "code/requirements.txt", "code/evaluation/extra_cases.md", "code/NOTES.md"]
-FINAL_REQUIRED = ["code/evaluation/evaluation_report.md", "code/evaluation/usage_report.md"]
+REQUIRED = ["README.md", "ARCHITECTURE.md", "Makefile", "code/main.py", "code/requirements.txt", "code/evaluation/extra_cases.md", "code/NOTES.md"]
+FINAL_REQUIRED = ["code/evaluation/evaluation_report.md", "code/evaluation/usage_report.md", "code/evaluation/performance_report.md", "code/evaluation/edge_case_sweep.md", "code/evaluation/agent_layer_report.md"]
 MAX_FILE_BYTES = 5_000_000
 
 SECRET_PATTERNS = {
@@ -44,7 +43,7 @@ SECRET_PATTERNS = {
     "key-like assignment": re.compile(r"""(?i)\b(?:api[_-]?key|secret|passwd|password|auth[_-]?token|access[_-]?token)\b["']?\s*[:=]\s*["'][A-Za-z0-9_\-/+=]{20,}["']"""),
 }
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-TEXT_EXT = {".py", ".md", ".txt", ".csv", ".json", ".sql", ".log", ".toml", ".cfg", ".ini", ".yml", ".yaml", ".sh", ".jsonl", ""}
+TEXT_EXT = {".py", ".md", ".txt", ".csv", ".json", ".sql", ".log", ".toml", ".cfg", ".ini", ".yml", ".yaml", ".sh", ".jsonl", ""}      # "" = Makefile
 
 
 def rel(p: Path, root: Path) -> str:
@@ -52,9 +51,9 @@ def rel(p: Path, root: Path) -> str:
 
 
 def collect(root: Path = ROOT) -> list[Path]:
-    """README.md plus everything under code/ that is not excluded, sorted."""
+    """README.md, ARCHITECTURE.md, Makefile plus everything under code/ that is not excluded, sorted."""
     out: list[Path] = []
-    for base in (root / "README.md", root / "code"):
+    for base in (root / "README.md", root / "ARCHITECTURE.md", root / "Makefile", root / "code"):
         paths = [base] if base.is_file() else sorted(base.rglob("*")) if base.exists() else []
         for p in paths:
             if not p.is_file():

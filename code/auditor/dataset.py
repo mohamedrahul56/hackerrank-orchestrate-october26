@@ -11,8 +11,10 @@ from pathlib import Path
 
 
 def parse_ts(value: str) -> datetime:
-    """Parse the dataset's ISO-8601 'Z' timestamps into aware UTC datetimes."""
-    return datetime.fromisoformat(value.strip().replace("Z", "+00:00")).astimezone(timezone.utc)
+    """Parse the dataset's ISO-8601 'Z' timestamps into aware UTC datetimes. A time without a zone is UTC too (the dataset's convention),
+    never the machine's local time: the answer must not depend on where the program runs."""
+    dt = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    return (dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt).astimezone(timezone.utc)
 
 
 @dataclass(frozen=True)
@@ -49,6 +51,9 @@ class DatasetError(RuntimeError):
     """A file the run cannot do without is missing or has no usable header. Everything else degrades row by row."""
 
 
+csv.field_size_limit(16 * 1024 * 1024)       # the csv module's default (128 KiB per field) would abort the whole run on one long request_text
+
+
 def _rows(path: Path, required: tuple[str, ...] = ()) -> list[dict[str, str]]:
     """Rows of a CSV as dicts. Blank lines are skipped; short rows get empty strings; a missing column in the header is an error."""
     try:
@@ -63,6 +68,8 @@ def _rows(path: Path, required: tuple[str, ...] = ()) -> list[dict[str, str]]:
         raise DatasetError(f"required file not found: {path}") from e
     except UnicodeDecodeError as e:
         raise DatasetError(f"{path.name} is not valid UTF-8: {e}") from e
+    except csv.Error as e:                                          # e.g. a field above the limit: a clear error, not a traceback
+        raise DatasetError(f"{path.name} is not readable as CSV: {e}") from e
 
 
 def try_ts(value: str | None) -> datetime | None:
@@ -103,13 +110,13 @@ def load_requests_lenient(path: Path) -> tuple[list[Request], list[BadRow], list
         seen.add(cid)
         order.append(cid)
         ts = {k: try_ts(r.get(k)) for k in ("requested_at", "reported_at", "audit_at")}
-        broken = [k for k, v in ts.items() if v is None]
-        if broken:
-            bad.append(BadRow(cid, i, f"unparseable {', '.join(broken)}"))
+        requested_at, reported_at, audit_at = ts["requested_at"], ts["reported_at"], ts["audit_at"]
+        if requested_at is None or reported_at is None or audit_at is None:
+            bad.append(BadRow(cid, i, f"unparseable {', '.join(k for k, v in ts.items() if v is None)}"))
         elif not (r.get("email") or "").strip():
             bad.append(BadRow(cid, i, "empty email"))
         else:
-            good.append(Request(cid, r["email"], ts["requested_at"], r.get("reported_status", ""), ts["reported_at"], ts["audit_at"], r.get("request_text", "")))
+            good.append(Request(cid, r["email"], requested_at, r.get("reported_status", ""), reported_at, audit_at, r.get("request_text", "")))
     return good, bad, order
 
 

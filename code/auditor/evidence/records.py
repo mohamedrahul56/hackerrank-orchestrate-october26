@@ -113,6 +113,7 @@ class EvidenceBase:
     obs: list[Obs] = field(default_factory=list)
     coverage: list[Coverage] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)   # unreadable/corrupt files etc. (never raises)
+    routes: list[Any] = field(default_factory=list)     # router.Routed: how each manifest file was routed and what it produced
 
 
 # ----------------------------------------------------------------------------- state rules per record shape

@@ -96,7 +96,7 @@ def sanitize(rec: dict) -> dict:
             "resource_id": rec.get("resource_id", "") if isinstance(rec.get("resource_id", ""), str) else ""}
 
 
-def observations_from_reading(base: EvidenceBase, file_id: str, file_t: datetime, reading: dict, catalog: list[dict]) -> int:
+def observations_from_reading(base: EvidenceBase, file_id: str, file_t: datetime, reading: dict, catalog: list[dict], source: str = "image:vlm") -> int:
     """Validate a model reading and append Obs. Returns how many records were accepted."""
     alias_to_resource = {row["alias"].lower(): row for row in catalog if row["alias"]}
     n = 0
@@ -118,7 +118,7 @@ def observations_from_reading(base: EvidenceBase, file_id: str, file_t: datetime
         pairs += [("phone", p) for p in rec["phones"] if norm_phone(p)]
         idents = idents_from(pairs) | (row["idents"] if row else frozenset())
         category, state = judged
-        base.obs.append(Obs(file_id, file_t, file_t, system_for(rid) if not row else row["system"], rid, category, state, idents, "image:vlm",
+        base.obs.append(Obs(file_id, file_t, file_t, system_for(rid) if not row else row["system"], rid, category, state, idents, source,
                             "selected" if rec["selected"] else "listed"))
         n += 1
     return n
@@ -132,6 +132,6 @@ def load_image(base: EvidenceBase, file_id: str, path: Path, file_t: datetime, e
     except (LLMUnavailable, SchemaError) as e:
         base.warnings.append(f"{file_id}: image {path.name} not read ({type(e).__name__}: {e})")
         return
-    n = observations_from_reading(base, file_id, file_t, reading, catalog)
+    n = observations_from_reading(base, file_id, file_t, reading, catalog, getattr(extractor, "obs_source", "image:vlm"))     # the agent reader tags its own observations
     if n == 0:
         base.warnings.append(f"{file_id}: image {path.name} read but no usable record in it")

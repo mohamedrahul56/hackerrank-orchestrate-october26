@@ -6,8 +6,11 @@ venv/
 node_modules/
 code.zip
 code/.cache/
+.mypy_cache/
+.ruff_cache/
 code/out/
 code/config/prices.json
 agent-trace/
 agent-trace.zip
 *.usage.jsonl
+*.partial.jsonl

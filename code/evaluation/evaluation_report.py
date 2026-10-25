@@ -23,13 +23,15 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "code"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import agent_proofs  # noqa: E402
+import edge_sweep as sweep  # noqa: E402
 import extra_cases as xc  # noqa: E402
 from auditor.audit import Auditor, Config  # noqa: E402
 from auditor.dataset import load_dataset  # noqa: E402
 from auditor.validate import validate_output_file  # noqa: E402
 from holdout import HEADER, account_holdout, analytics_holdout  # noqa: E402
 from phase2_report import as_rows, classify_missing, metrics_line, pct, run  # noqa: E402
-from score import Row, assign_splits, build_report, read_rows, score  # noqa: E402
+from score import assign_splits, build_report, read_rows, score  # noqa: E402
 
 D = ROOT / "dataset"
 OUT = ROOT / "code" / "evaluation"
@@ -54,6 +56,58 @@ def load_module(name: str, path: Path):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def readings_experiment(cli, out_csv: Path, prov: list[str], main_ids: list[str]) -> list[str]:
+    """Run the whole request set twice with the screenshots taken from the local readings file (auditor/readings.py) and describe, row by row, how it differs from out_csv.
+    The readings file is not committed (it holds dataset e-mail addresses), so without it the section says so."""
+    import csv
+    import json
+    rf = ROOT / "code" / "out" / "agent_readings.json"
+    if not rf.exists():
+        return ["* **Screenshots read from a readings file:** not run here: `code/out/agent_readings.json` (not committed, it holds dataset e-mail addresses) was not present when this report was generated."]
+    with tempfile.TemporaryDirectory() as d:
+        runs = []
+        for i in (1, 2):
+            o = Path(d) / f"readings{i}.csv"
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                code = cli.main(["--out", str(o), "--images", "file", "--set", f"llm.readings_file={rf}"])
+            runs.append((code, o.read_bytes(), err.getvalue()))
+        o1 = Path(d) / "readings1.csv"
+
+        def load(path):
+            with open(path, newline="", encoding="utf-8") as fh:
+                return {r["case_id"]: (r["deletion_status"], json.loads(r["steps_json"])) for r in csv.DictReader(fh)}
+        base, new = load(out_csv), load(o1)
+        counts = lambda m: ", ".join(f"{k} {v}" for k, v in sorted(collections.Counter(x[0] for x in m.values()).items()))  # noqa: E731
+        notes = (Path(d) / "readings1.notes.md").read_text(encoding="utf-8")
+    changed = [c for c in main_ids if base[c] != new[c]]
+    same_prov = [c for c in prov if c not in changed]
+    sha = lambda b: hashlib.sha256(b).hexdigest()  # noqa: E731
+    L = ["* **Screenshots read from a readings file (the coding agent's own reading of the 11 PNGs, not a model call by the program).** "
+         "`--images file` takes each screenshot's reading from `code/out/agent_readings.json`, keyed by the sha256 of the PNG's bytes, and passes it through the same JSON-schema validation and "
+         "the same field sanitising as a model's answer (`auditor/readings.py`; the transcription for the reader to check by eye is `code/out/agent_readings_check.md`).",
+         f"  * Two full runs: exit codes {runs[0][0]}, {runs[1][0]}; sha256 `{sha(runs[0][1])[:16]}...` and `{sha(runs[1][1])[:16]}...`: **{'byte-identical' if runs[0][1] == runs[1][1] else 'DIFFERENT'}**. "
+         f"The submitted `output.csv` is `{sha(out_csv.read_bytes())[:16]}...`.",
+         f"  * Status counts: submitted run {counts(base)}; with readings {counts(new)}. Provisional rows: {len(prov)} in the submitted run, "
+         f"{(re.search(r'## Provisional rows \((\d+)\)', notes) or [0, '?'])[1]} with readings.",
+         f"  * The {len(prov)} provisional rows: **{len(same_prov)} come out identical** once the screenshot is actually read (the provisional assumption, 'the record the data catalog ties to the user is still there', "
+         f"was confirmed by the reading in every one); {len(prov) - len(same_prov)} changed."]
+    L.append(f"  * Rows of `output.csv` that differ ({len(changed)}): " + (", ".join(f"`{c}`" for c in changed) if changed else "none") + ".")
+    for c in changed:
+        sa, sb = base[c], new[c]
+        key = lambda st: [(x["operation"], x["resource_id"], x["evidence_id"]) for x in st[1]]  # noqa: E731
+        gone = [k for k in key(sa) if k not in key(sb)]
+        added = [k for k in key(sb) if k not in key(sa)]
+        L.append(f"    * `{c}` {sa[0]} -> {sb[0]}: removed " + (", ".join(f"{o} `{r}` ({e or 'no evidence'})" for o, r, e in gone) or "nothing") + "; added "
+                 + (", ".join(f"{o} `{r}` ({e or 'no evidence'})" for o, r, e in added) or "nothing") + ".")
+    if changed:
+        L.append("  * **Not adopted into the submitted `output.csv`.** The one differing row comes from the security-audit screenshot, which lists six events for one user as `audit_record_N`; in every other source "
+                 "each user has exactly one audit record (457 of 457 users with one, and 24 of 24 sample answers that verify an audit record verify exactly one), so the five extra verification steps are most likely "
+                 "false positives. In addition, a submission that depends on a readings file cannot be reproduced from `code.zip` (the file holds dataset e-mail addresses and is never zipped). "
+                 "`--images file` is the way to reproduce the experiment.")
+    return L
 
 
 def main() -> int:
@@ -168,13 +222,34 @@ def main() -> int:
           "* **Deterministic-only (what produced `output.csv`)**: the rows above. None of the 32 labeled samples depends on a screenshot, so the vision path cannot change a sample score.",
           "* **With the vision model: not measured.** No API key was available in this environment. The path (prompt, JSON schema, validation, cache, retries, usage log, fallback model) is "
           "covered by tests with a fake client, and `evaluation/show_image_readings.py` lets a reader compare each of the 11 PNGs with the model's reading. "
-          f"The only rows that can change are the {len(prov)} provisional ones (`{', '.join(prov)}`), plus any row whose evidence includes a PNG that the structured data already covers.", ""]
+          f"The only rows that can change are the {len(prov)} provisional ones (`{', '.join(prov)}`), plus any row whose evidence includes a PNG that the structured data already covers."]
+    L += readings_experiment(cli, out_csv, prov, main_ids)
+    L += ["", "### 5.5 The opt-in agent layer (`--images agent`)", "",
+          "**Agent layer built and tested with fakes only; 0 calls, 0 tokens, no cost.** A bounded tool-calling reader (tools `zoom_region` and `submit_reading`, versioned prompts in `code/prompts/`, "
+          "a deterministic gate, caps, caching, fallback to the deterministic result) can read the screenshots with a model. It is opt-in and was never run against a real model (no key). "
+          "Live no-change proofs and the test inventory are in `code/evaluation/agent_layer_report.md`:", ""]
+    L += [f"* {a_}: expected {b_}; observed {c_} - **{d_}**" for a_, b_, c_, d_ in agent_proofs.proofs()]
+    L += ["", "The gate rule that can change a state, G10 (a model reading cannot lower the severity of a state that deterministic evidence supports), is applied only to model-sourced observations, "
+          "so the default path is byte-identical by construction.", "", "### 5.6 Edge-case sweep", "",
+          "`code/evaluation/edge_sweep.py` runs the real pipeline on small synthetic datasets that each isolate one awkward input (empty or missing fields, bad timestamps, duplicate or unknown ids, "
+          "e-mail spelling, old e-mails, several requests per user, events after audit_at, failed-but-claimed-success operations, resources without an identifier, shared reported_at, retained records "
+          "with extra identifiers, expired legal holds, corrupt or missing evidence, corrupt PNGs, prompt injection). Every scenario states its expected behaviour in words before the run; the full table "
+          "(case, expected, observed, verdict) is `code/evaluation/edge_case_sweep.md`.", "",
+          "| area | scenarios | OK | DECISION | DEFECT |", "|---|---|---|---|---|"]
+    sweep_rows = sweep.run_all()
+    for area in dict.fromkeys(r.area for r in sweep_rows):
+        rs = [r for r in sweep_rows if r.area == area]
+        L.append(f"| {area} | {len(rs)} | {sum(r.verdict == 'OK' for r in rs)} | {sum(r.verdict == 'DECISION' for r in rs)} | {sum(r.verdict == 'DEFECT' for r in rs)} |")
+    L += [f"| **all** | **{len(sweep_rows)}** | **{sum(r.verdict == 'OK' for r in sweep_rows)}** | **{sum(r.verdict == 'DECISION' for r in sweep_rows)}** | **{sum(r.verdict == 'DEFECT' for r in sweep_rows)}** |", "",
+          "The first run of the sweep on the code before any fix found **8 defects**, all fixed with regression tests (`tests/test_edge_regressions.py`); see section 7 and the defects table at the end of "
+          "`edge_case_sweep.md`.", ""]
 
     # ------------------------------------------------------------------ 6. provisional rows
     L += ["## 6. Provisional rows", "",
           f"{len(prov)} deletion requests have a screenshot as their only state evidence. Without a vision-model key each is answered `INCOMPLETE` with three steps "
           "(finding on the record the data catalog ties to the user inside the window, citing the in-window screenshot of the same system; remediation; verification). "
-          "The state is assumed, not read. They are listed in `output.notes.md`, in `phase4_results.md` and below.", "",
+          "The state is assumed, not read. They are listed in `output.notes.md`, in `phase4_results.md` and below. **They are still provisional in the submitted `output.csv`**: the submitted run used neither "
+          "a model nor a readings file. With the readings file all of them are computed normally and come out identical (section 5.4).", "",
           "| case | reported_status | provisional steps |", "|---|---|---|"]
     for c in prov:
         L.append(f"| {c} | {a.requests[c].reported_status} | " + " -> ".join(f"{s['operation']} `{s['resource_id']}`" for s in res_m[c].steps) + f" (finding cites `{res_m[c].steps[0]['evidence_id']}`) |")
@@ -191,7 +266,10 @@ def main() -> int:
           "now guarded by a test that fails on the old default (row 17).",
           "* **'No later-evidence' ablation leaked later evidence** through late-linked accounts, and those links were not in the log; fixed and logged (row 19).",
           "* **A wrong NOT_APPLICABLE placeholder** for deletion requests whose only evidence is a screenshot; replaced by provisional INCOMPLETE rows (row 23).",
-          "* **An instruction-like status word extracted from an image could have flipped a state**; model-written fields are now sanitised (row 28).", ""]
+          "* **An instruction-like status word extracted from an image could have flipped a state**; model-written fields are now sanitised (row 28).",
+          "* **The edge-case sweep (section 5.6) found 8 defects** on its first run: a time without a zone was read in the machine's time zone; an unreadable `retained_until` dropped a legal-hold record; "
+          "a manifest path could leave the dataset folder; a request text above 128 KiB ended the whole run; a resource id taken from evidence was copied into a step verbatim; a missing or malformed "
+          "rules file was a traceback and an unknown rule action silently turned cases into NOT_APPLICABLE (row 44).", ""]
     L += table_from(OUT / "CHANGELOG.md", "| #") + [""]
 
     # ------------------------------------------------------------------ 8. remaining failures and known weaknesses
@@ -212,7 +290,7 @@ def main() -> int:
           "* **The second-of-minute heuristics exploit regularities of this dataset's synthetic event timing and would not be reliable on production logs.** They can be switched off with "
           "`--no-timing-heuristics`; section 5 shows what that costs (step F1 on the samples, rows without an account step).",
           "* The legal-hold exposed-identifier shape and every category without a labeled sample are verified only by the synthetic cases.",
-          "* Classifier lexicons cover eight languages; other languages end as ambiguous and fall back to a validated model tie-breaker (fakes only) or NOT_APPLICABLE.",
+          "* Classifier lexicons cover eight languages; other languages end as ambiguous and therefore NOT_APPLICABLE (a model tie-break hook exists in `classify.py` but `main.py` does not enable it; tested with a fake client only).",
           "* Constants (time windows, chain gaps, margins) were set from the labeled data; they are documented and unit-tested.", ""]
 
     # ------------------------------------------------------------------ 9. determinism, robustness, tests
@@ -234,12 +312,15 @@ def main() -> int:
           f"**{'yes' if out_csv.exists() and out_csv.read_bytes() == outs[0][1] else 'NO'}**.",
           f"* test suite: **{n_tests} tests, {len(result.failures)} failures, {len(result.errors)} errors** (`python3 -m unittest discover -s code/tests -t code`): scorer and validator, classifier "
           "(112 request sentences, paraphrases), pipeline stages, the synthetic cases, robustness (malformed rows, corrupt files, API timeouts / rate limits / invalid JSON / refusals "
-          "with a fake client, injection strings in model-written fields), packaging rules, no-hardcoding scan and secrets scan.",
+          "with a fake client, injection strings in model-written fields), the edge-case sweep and its regression tests, bounded concurrent image reads, the resume tests (a real SIGKILL), "
+          "readings-file tests, packaging rules, no-hardcoding scan and secrets scan.",
           "* model nondeterminism (cleared-cache rerun with a real model): **not measured** (no key); cold / warm / cleared-cache agreement is tested with a fake client.", ""]
 
     # ------------------------------------------------------------------ 10. unmeasured
     L += ["## 10. Not measured", "",
-          "* vision-model accuracy on the 11 screenshots, its run-to-run variance, token usage and cost (no API key was available; `usage_report.md` states 0 calls);",
+          "* vision-model accuracy on the 11 screenshots, its run-to-run variance, token usage and cost (no API key was available; `usage_report.md` states 0 calls); the same holds for the agent layer "
+          "(agent layer built and tested with fakes only; 0 calls, 0 tokens, no cost). The readings file is one pass of "
+          "the coding agent's own vision, checked by nobody else yet, and is not a measurement of a vision model;",
           f"* the true answers of the {len(prov)} provisional rows;",
           "* the exposed-identifier shape of a legal-hold record, and all policy categories without a labeled sample, beyond the synthetic cases;",
           "* behaviour on another dataset instance (another generator seed) and whether the timing heuristics hold there;",

@@ -2,10 +2,10 @@
 import csv
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from pathlib import Path
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import DATASET, ROOT, needs_dataset
 from auditor import discover as dsc
 from auditor.dataset import parse_ts
 from auditor.evidence.logparse import parse_line

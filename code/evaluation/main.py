@@ -3,6 +3,7 @@
 
     python3 code/evaluation/main.py                 # samples -> code/out/pred_samples.csv, then the scorer
     python3 code/evaluation/main.py --split all     # extra arguments are passed to the scorer (see score.py --help)
+    python3 code/evaluation/main.py --images file   # the same, with the screenshots read from the readings file instead of left unread
 
 The full evaluation write-up (accuracy, step/field/sequence metrics, extra cases, failures and fixes) is in
 `code/evaluation/evaluation_report.md`; the 23 extra cases are in `code/evaluation/extra_cases.md`.
@@ -25,8 +26,12 @@ _spec.loader.exec_module(agent)
 
 
 def run(argv: list[str]) -> int:
-    pred = ROOT / "code" / "out" / "pred_samples.csv"
-    code = agent.main(["--requests", "sample_deletion_requests.csv", "--out", str(pred), "--images", "off"])
+    images = "off"                                                  # `--images file` scores the samples with the readings file (code/out/agent_readings.json) instead
+    if "--images" in argv:
+        i = argv.index("--images")
+        images, argv = argv[i + 1], argv[:i] + argv[i + 2:]
+    pred = ROOT / "code" / "out" / ("pred_samples.csv" if images == "off" else f"pred_samples_{images}.csv")
+    code = agent.main(["--requests", "sample_deletion_requests.csv", "--out", str(pred), "--images", images])
     if code != 0:
         return code
     return score.main(["--pred", str(pred), *(argv or ["--split", "both"])])

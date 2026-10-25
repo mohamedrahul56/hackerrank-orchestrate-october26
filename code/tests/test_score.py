@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import DATASET, needs_dataset
 from score import Row, align, assign_splits, lcs_ratio, prf, read_rows, score
 
 

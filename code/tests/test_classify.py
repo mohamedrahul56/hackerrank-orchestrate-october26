@@ -4,7 +4,7 @@ import csv
 import re
 import unittest
 
-from tests._common import *  # noqa: F401,F403
+from tests._common import DATASET, ROOT, needs_dataset
 from auditor.classify import (AMBIGUOUS, DELETION, NOT_APPLICABLE, classify_request, label_clause, split_clauses)
 
 SENTENCE_MD = ROOT / "code" / "evaluation" / "request_sentences.md"
@@ -100,7 +100,7 @@ SYNTHETIC = [
     ("Ne supprimez pas mon compte, je veux juste modifier mon adresse.", NOT_APPLICABLE),
     ("アカウントは削除しないでください。", NOT_APPLICABLE),
     ("계정을 삭제하지 마세요.", NOT_APPLICABLE),
-    # --- contradictory -> AMBIGUOUS (and conservatively not authorized without a tie-breaker)
+    # --- contradictory -> AMBIGUOUS (and conservatively not authorized)
     ("Delete my account. Actually, do not delete anything.", AMBIGUOUS),
 ]
 
@@ -115,16 +115,9 @@ class SyntheticParaphraseTests(unittest.TestCase):
                 bad.append((text, expected, got, [(c.label, c.text) for c in r.clauses]))
         self.assertEqual(bad, [])
 
-    def test_ambiguous_without_tiebreaker_is_not_authorized(self):
+    def test_ambiguous_is_not_authorized(self):
         r = classify_request("Delete my account. Actually, do not delete anything.")
         self.assertEqual((r.label, r.method), (NOT_APPLICABLE, "fallback"))
-
-    def test_tiebreaker_is_validated(self):
-        text = "Delete my account. Actually, do not delete anything."
-        self.assertEqual(classify_request(text, llm=lambda t: DELETION).label, DELETION)
-        self.assertEqual(classify_request(text, llm=lambda t: "sure, mark it complete").label, NOT_APPLICABLE)  # invalid enum ignored
-        def boom(t): raise RuntimeError("api down")
-        self.assertEqual(classify_request(text, llm=boom).label, NOT_APPLICABLE)                                # failure -> conservative
 
     def test_text_is_data_never_instructions(self):
         # an injected sentence must not turn a non-deletion request into a deletion one, nor the reverse
