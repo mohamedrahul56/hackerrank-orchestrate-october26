@@ -145,7 +145,7 @@ From `code/evaluation/performance_report.md` (median of 3 fresh-process runs per
 ### D1. A deterministic core; the model only describes
 
 * **Context.** The task needs a verdict per case that can be audited, repeated and defended. Evidence is structured (SQL snapshots, JSON, logs, text, PDF) except for 11 PNG screenshots. Evidence text can contain instructions.
-* **Decision.** Statuses, steps, order and citations come from code driven by `deletion_rules.csv`. The only model use is optional: describing a screenshot as schema-validated JSON (the code also has a hook for a model tie-break on ambiguous request wording; `main.py` does not enable it, and it is tested only with a fake client). The model's output is data; code validates it.
+* **Decision.** Statuses, steps, order and citations come from code driven by `deletion_rules.csv`. The only model use is optional: describing a screenshot as schema-validated JSON (a model is called only to read screenshots; ambiguous request wording is `NOT_APPLICABLE`). The model's output is data; code validates it.
 * **Consequences.** The submitted `output.csv` was produced with 0 model calls and is byte-identical in 27 runs under different hash seeds, working directories and locales (`code/NOTES.md`, determinism section). The cost is that the vision path is untested against a real model: the 9 requests that depend only on a screenshot carry provisional rows.
 * **Rejected.** One model call per case with the evidence in the prompt: not reproducible, injectable, and no better on structured data.
 

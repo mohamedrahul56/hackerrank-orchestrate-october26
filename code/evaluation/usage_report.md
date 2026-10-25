@@ -23,7 +23,7 @@ Everything below is computed from that log; no figure is typed in by hand.
 
 ## Per request
 
-* total tokens: **0**; average per request: **0.0** (518 requests; a model is called only to read a screenshot, or for a request whose wording the rule-based classifier finds ambiguous)
+* total tokens: **0**; average per request: **0.0** (518 requests; a model is called only to read a screenshot)
 * model calls per request: 0.000
 * estimated total cost: **cost not computed - prices not supplied**
 * estimated cost per request: **cost not computed - prices not supplied**

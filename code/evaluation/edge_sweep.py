@@ -216,7 +216,7 @@ def req_scenarios() -> None:
     one("E04", "empty requested_at", "conservative NOT_APPLICABLE row (the evidence window cannot be built)", {"requested_at": ""}, fallback)
     one("E05", "empty audit_at", "conservative NOT_APPLICABLE row", {"audit_at": ""}, fallback)
     one("E06", "empty reported_at", "conservative NOT_APPLICABLE row (the row is malformed)", {"reported_at": ""}, fallback)
-    one("E13", "deletion request written in a language the lexicons do not cover (Hindi)", "conservative NOT_APPLICABLE (a known limit, README): no model is enabled to read it",
+    one("E13", "deletion request written in a language the lexicons do not cover (Hindi)", "conservative NOT_APPLICABLE (a known limit, README): no model reads request text",
         {"request_text": "कृपया मेरा खाता हटा दें और मेरा सारा डेटा मिटा दें।"}, fallback)
     one("E07", "empty reported_status", "audited normally: the workflow status is a claim and is never used as proof", {"reported_status": ""}, is_base)
     one("E08", "unknown reported_status 'DONE'", "audited normally (same answer as with a valid status)", {"reported_status": "DONE"}, is_base)

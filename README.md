@@ -5,7 +5,7 @@ every copy of their data at `audit_at`, applies `dataset/deletion_rules.csv`, an
 an ordered remediation plan and verification checks) or `NOT_APPLICABLE` (`[]`). The challenge contract is in `problem_statement.md` / `AGENTS.md` (not repeated here).
 
 **Principle: the model describes, deterministic code decides.** All statuses and steps come from code. The only model use is optional: turning the 11 PNG screenshots into schema-validated
-JSON facts. (`classify.py` also has a hook for a model tie-break on ambiguous request wording; the command line does not enable it, so ambiguous wording is `NOT_APPLICABLE`.) **The submitted `output.csv` was produced without any model call**
+JSON facts. (No model reads request text: ambiguous request wording is `NOT_APPLICABLE`.) **The submitted `output.csv` was produced without any model call**
 (no API key was available when it was generated; see "Known weaknesses").
 
 ## Quick start
@@ -171,7 +171,7 @@ The 32 labels were all read in Phase 0 to infer the rules, so none of these numb
 * 27 deletion rows lack an account verification step, and 28 rows have an anonymized-analytics record whose owner cannot be separated from another case's; both are omitted on purpose (nothing separates the candidates).
 * Policy categories without a labeled sample (cache, delivery log, telemetry, marketing, secondary identifier, attachments, legal-hold exposure) are verified only by the synthetic cases; the redaction shape for an
   exposed legal-hold record is an assumption.
-* Classifier lexicons cover eight languages; other languages end as `NOT_APPLICABLE` (a model tie-break hook exists in `classify.py`, but `main.py` does not enable it and it is tested only with a fake client).
+* Classifier lexicons cover eight languages; other languages end as `NOT_APPLICABLE`.
 
 ## Repository layout
 

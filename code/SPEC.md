@@ -17,7 +17,7 @@ Step = `{step_no, phase, system_id, resource_id, operation, state, evidence_id}`
 ## 3. Pipeline (planned modules under `code/auditor/`)
 
 1. `identity.py` — email(any case) → `user_id`; collect all historical emails/hashes/phones from the audit log; sha256(lower(strip(email))).
-2. `classify.py` — deletion vs non-deletion request (keyword rules; LLM only for ambiguous text, validated).
+2. `classify.py` — deletion vs non-deletion request (keyword rules; ambiguous text is NOT_APPLICABLE).
 3. `evidence/` — parsers: `sql.py` (sandboxed sqlite3), `json_records.py`, `logs.py` (per-format regex), `text.py` (handover), `pdf.py`, `image.py` (VLM + cache).
    All produce uniform **Observation** rows: `(file_id, captured_at, system_id, resource_id, category, fields{email,user_ref,hash,phone,state-flags}, source_topology)`.
 4. `link.py` — attach observations/resources to a user by exact identifiers; activity-timeline candidate matching for unlinkable ids.

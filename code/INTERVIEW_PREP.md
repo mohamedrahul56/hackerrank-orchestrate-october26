@@ -98,7 +98,7 @@ Nine deletion requests have a screenshot as their only state evidence. The class
 They are flagged in `output.notes.md`, `phase4_results.md`, the evaluation report and the README, and become normal rows when a key is present. They lack the account and audit-record verifications.
 
 **Q7. How is the usage so low?**
-Honestly: it is zero. The final run made 0 model calls and used 0 tokens (`usage_report.md`), because no key was available. By design only the 11 screenshots (and rare ambiguous wording) would ever call a model,
+Honestly: it is zero. The final run made 0 model calls and used 0 tokens (`usage_report.md`), because no key was available. By design only the 11 screenshots would ever call a model,
 so a real run would be about 11 images with `claude-haiku-5-5`, cached by file hash; I have not measured that cost and prices were not supplied, so the report says "cost not computed - prices not supplied".
 
 **Q8. How do you know the main-set answers are right without labels?**

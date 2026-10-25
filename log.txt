@@ -707,3 +707,24 @@ branch=claude/exciting-lamport-yrcfpx
 repo_root=/home/user/hackerrank-orchestrate-october26
 worktree=main
 parent_agent=none
+
+## [2026-10-25T08:10:00Z] Remove the stale tie-break claims from the documents
+
+User Prompt (verbatim, secrets redacted):
+Follow AGENTS.md logging. README.md lines 8 and 174 and usage_report.md line 26 (fix it in code/evaluation/usage_report.py so the regenerated file is correct) still describe a model tie-break hook in classify.py that was deleted in CHANGELOG row 47. Remove those claims so every document matches the code: ambiguous request wording is simply NOT_APPLICABLE, and a model is called only to read screenshots. Grep README, ARCHITECTURE, INTERVIEW_PREP, NOTES and SPEC for any other mention and fix it. Do not change any code behavior. Confirm output.csv keeps sha256 4676156f…, run the tests, regenerate the usage report, rebuild code.zip and run final_check.py with --expect-log-turns 23.
+
+Agent Response Summary:
+Removed the tie-break hook claims from README (2 places), ARCHITECTURE (decision record), INTERVIEW_PREP, NOTES (A2), SPEC, and from the report generators usage_report.py and evaluation_report.py; also reworded the E13 expectation in edge_sweep.py (text only). The history lines that say the hook was removed (CHANGELOG 47, NOTES section on the classifier, INTERVIEW_PREP last-round bullet) stay. No behaviour changed; output.csv is still sha256 4676156f…. Regenerated usage_report.md, evaluation_report.md and edge_case_sweep.md.
+
+Actions:
+* grep for tie-break mentions in README, ARCHITECTURE, INTERVIEW_PREP, NOTES, SPEC and the evaluation scripts; edited them
+* python3 code/main.py (sha256 unchanged), usage_report.py --final, edge_sweep.py, evaluation_report.py
+* tests, code.zip rebuild and final_check.py --expect-log-turns 23
+
+Context:
+tool=Claude Code
+model=claude-sonnet-5-5
+branch=claude/exciting-lamport-yrcfpx
+repo_root=/home/user/hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none

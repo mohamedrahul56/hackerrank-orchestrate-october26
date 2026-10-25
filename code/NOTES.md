@@ -163,7 +163,7 @@ cohort count matching (k unlinked resources vs k unlinked cases in the same R-gr
 ## 7. Assumptions recorded
 
 * A1: exact-identifier matching (case-insensitive email, exact user_id, sha256 of lowercased email, normalized phone); never name/fuzzy.
-* A2: NOT_APPLICABLE ⇔ request text explicitly does not authorize deletion (keyword rules + LLM only if ambiguous).
+* A2: NOT_APPLICABLE ⇔ request text explicitly does not authorize deletion (keyword rules; ambiguous wording is NOT_APPLICABLE).
 * A3: evidence captured after `audit_at` is never cited and never used for *state*.
 * A4: resource_id ordering = plain string order (untested).
 * A5: `case_id` output order = numeric order of the input file (matches the input; graders usually key by id).

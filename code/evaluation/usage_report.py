@@ -95,7 +95,7 @@ def summarise(rows: list[dict], n_requests: int, prices: dict, price_problems: l
         L.append("| - | - | - | 0 | 0 | 0 | 0 |")
     tokens = tot["input"] + tot["output"]
     L += ["", "## Per request", "",
-          f"* total tokens: **{tokens}**; average per request: **{tokens / n_requests:.1f}** ({n_requests} requests; a model is called only to read a screenshot, or for a request whose wording the rule-based classifier finds ambiguous)",
+          f"* total tokens: **{tokens}**; average per request: **{tokens / n_requests:.1f}** ({n_requests} requests; a model is called only to read a screenshot)",
           f"* model calls per request: {tot['calls'] / n_requests:.3f}",
           "* estimated total cost: " + (f"**${total_cost:.4f}**" if (by_model and priced_all) else f"**{price_mod.NOT_SUPPLIED}**"),
           "* estimated cost per request: " + (f"**${total_cost / n_requests:.6f}**" if (by_model and priced_all) else f"**{price_mod.NOT_SUPPLIED}**"), ""]
