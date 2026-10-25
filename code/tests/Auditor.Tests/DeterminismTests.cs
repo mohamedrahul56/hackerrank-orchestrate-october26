@@ -13,7 +13,7 @@ public class DeterminismTests : IDisposable
 
     private static string Sha(string p) => File.Exists(p) ? Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(p))).ToLowerInvariant() : "(missing)";
 
-    /// <summary>Quick matrix: each run uses another working directory, locale and time zone (three runs; the full 3 x 3 matrix is `make determinism`).</summary>
+    /// <summary>Quick matrix: each run uses another working directory, locale and time zone (three runs; the argument `full: true` runs the whole 3 x 3 matrix).</summary>
     private List<Run> RunMatrix(string dataset, bool full)
     {
         var cwds = new[] { Repo.Root, tmp.Path, "/" };

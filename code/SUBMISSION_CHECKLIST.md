@@ -1,18 +1,18 @@
 # Submission checklist (prepared in Phase 1; verified item by item in Phase 5)
 
-Automatic verification of everything a program can check: `python3 code/tools/final_check.py --build-zip --expect-log-turns 6` (prints a Markdown checklist, items it cannot verify are marked NOT VERIFIED).
+Automatic verification of everything a program can check: `make check` (= `dotnet run -c Release --project code/tools/Auditor.Tools -- final-check --build-zip --expect-log-turns <number of user turns in log.txt>`) (prints a Markdown checklist, items it cannot verify are marked NOT VERIFIED).
 
-**Exact files to upload:** `code.zip` (built by `python3 code/tools/package.py --require-final`, repository root) - `output.csv` (repository root) - `log.txt` (repository root, as the chat transcript) - `agent-trace.zip` (you export it, steps below). The AI interview uses `code/INTERVIEW_PREP.md`.
+**Exact files to upload:** `code.zip` (built by `make package` (= `Auditor.Tools package --require-final`), repository root) - `output.csv` (repository root) - `log.txt` (repository root, as the chat transcript) - `agent-trace.zip` (you export it, steps below). The AI interview uses `code/INTERVIEW_PREP.md`.
 
 ## Files to upload
-- [ ] `code.zip` - built from the repo root with `python3 code/tools/package.py --require-final` (checks every rule below first; `--dry-run` lists without writing). Must contain `README.md`, `code/` (incl. `code/evaluation/evaluation_report.md` and `code/evaluation/usage_report.md`).
-- [ ] `output.csv` - root-level, 518 data rows + header, row order = `dataset/deletion_requests.csv`, passes `auditor.validate.validate_output_file`.
+- [ ] `code.zip` - built from the repo root with `make package` (= `Auditor.Tools package --require-final`) (checks every rule below first; `--dry-run` lists without writing). Must contain `README.md`, `code/` (incl. `code/evaluation/evaluation_report.md` and `code/evaluation/usage_report.md`).
+- [ ] `output.csv` - root-level, 518 data rows + header, row order = `dataset/deletion_requests.csv`, passes `Validator.ValidateOutputFile` (`Auditor.Tools final-check` runs it).
 - [ ] `chat_transcript` = root `log.txt` (append-only; every entry has non-empty `tool=` and `model=`).
 - [ ] `agent-trace.zip` (you export it yourself; steps below).
 - [ ] AI interview: `code/INTERVIEW_PREP.md` (Phase 5).
 
 ## code.zip must NOT contain
-- [ ] `dataset/` (already tracked in the repo by the starter commit - the zip command must exclude it)  - [ ] `.env` / keys  - [ ] `.venv`/`venv`/`node_modules`/`__pycache__`
+- [ ] `dataset/` (already tracked in the repo by the starter commit - the zip command must exclude it)  - [ ] `.env` / keys  - [ ] `bin/` and `obj/` build output, `node_modules`
 - [ ] nested archives (`.zip .tar .gz .tgz .7z .rar`)  - [ ] `code/out/`, `code/.cache/`  - [ ] real personal data
 - [ ] Reports are Markdown (the code judge ignores `.csv .tsv .json .jsonl .sql .log`)
 
@@ -27,6 +27,6 @@ Automatic verification of everything a program can check: `python3 code/tools/fi
 
 ## Final-run rules
 - [ ] `usage_report.md` comes from a cold-cache full run of all 518 cases; prices only from your own file (`code/config/prices.json`, per model: rates + source URL + date) or the report says "cost not computed - prices not supplied".
-  Sequence (in your own shell; the key is never written to a file): `export ANTHROPIC_API_KEY=...` -> `python3 code/evaluation/show_image_readings.py` (look at the 11 pictures next to the readings; open `code/out/image_readings.html`)
-  -> `rm -rf code/.cache/llm code/out/usage_log.jsonl` -> `python3 code/main.py` -> `python3 code/evaluation/usage_report.py --final`.
+  Sequence (in your own shell; the key is never written to a file): `export ANTHROPIC_API_KEY=...` -> `Auditor.Tools show-readings` (look at the 11 pictures next to the readings; open `code/out/image_readings.html`)
+  -> `rm -rf code/.cache/llm code/out/usage_log.jsonl` -> `make run` -> `Auditor.Tools usage-report --final` (`Auditor.Tools` = `dotnet run -c Release --project code/tools/Auditor.Tools --`).
 - [ ] Submission URL taken from your registration email (not from AGENTS.md).

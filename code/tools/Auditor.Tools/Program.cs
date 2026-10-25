@@ -31,6 +31,12 @@ public static class Program
             "final-check" => FinalCheck.Run(rest, stdout, stderr),
             "extra-cases" => ExtraCases.Run(rest, stdout, stderr),
             "show-readings" => ShowReadings.Run(rest, stdout, stderr),
+            "baselines" => Baselines.Run(rest, stdout, stderr),
+            "agent-proofs" => AgentProofs.Run(rest, stdout, stderr),
+            "evaluation-report" => EvaluationReport.Run(rest, stdout, stderr),
+            "performance-report" => PerformanceReport.Run(rest, stdout, stderr),
+            "mutation-check" => MutationCheck.Run(rest, stdout, stderr),
+            "perf-run" => PerformanceReport.Run(args, stdout, stderr),
             _ => Unknown(args[0], stderr),
         };
     }

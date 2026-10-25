@@ -2,12 +2,12 @@
 
 ## Version stamp (what produced this file)
 
-* pipeline version: `2026.10.5`
+* pipeline version: `2026.10.6`
 * rules file (deletion_rules.csv) sha256: `e12d47ca4cbecc4a3c924b52705d9c5b1ebcfa71d6a28f58d988571eeccb32f7`
 * prompt `agent_image_reader`: version `agent-img-v2/agent-img-v2`, text+schema sha256 `31283fcbc08cd83a22c893904a7115194f4252988aa41b1be0cd0d787e11bc7f`
 * prompt `image_reading`: version `img-v1`, text+schema sha256 `efbeb55e3b07b96064fc758c9bbda64d44ae9a32f8930b826f178eec33511fce`
-* code sha256 (auditor/*.py): `39cbef44c18b17d88c2b605a179b6750ca537d78e6fc073d24f40e3a4fcfdae1`
-* settings fingerprint: `f543c4ab42518fa2b3cfeccb4f523cba043452e41f594ef4ea07ba3239c7f5c5`
+* code sha256 (Auditor.dll): `228f4b3b8e7aa4e83bd181513cf1fc5852f495381819069f73888b84e5839758`
+* settings fingerprint: `f5a27c7cc53204e310c7f5556b54ba6668dcc615ba509b98435bbebff26b8921`
 
 Effective settings: `pipeline.cohort_filter=false`, `pipeline.discovery=true`, `pipeline.later_linking=true`, `pipeline.provisional_rows=true`, `pipeline.timing_heuristics=true`, `llm.cache_dir=""`, `llm.fallback_model="claude-sonnet-5-5"`, `llm.images="auto"`, `llm.max_concurrency=4`, `llm.max_run_tokens=0`, `llm.model="claude-haiku-5-5"`, `llm.readings_file=""`, `llm.timeout_seconds=60.0`, `discovery.account_window_minutes=[-90.0, 15.0]`, `discovery.analytics_min_llr=2.0`, `discovery.analytics_window_minutes=[-45.0, -5.0]`, `discovery.chain_gaps_seconds=[390, 449]`, `discovery.chain_tolerance_seconds=2.0`, `discovery.phase_margin=2.0`, `audit.later_link_max_days=7`, `agent.max_iterations=5`, `agent.max_tool_calls=6`, `agent.max_zooms=4`, `agent.wall_seconds=120.0`, `agent.zoom_max_px=1200`
 

@@ -1,5 +1,24 @@
 # SPEC (DRAFT — Phase 0; every "inferred" rule must be validated against the 32 samples in Phase 2)
 
+> **Port note (CHANGELOG row 53).** The project was first written in Python and has been ported to C# / .NET 10; the Python code is gone from the repository (the last Python commit is `277dfe4`). This file is the working log written during the Python phases, so
+> the module, script and test names in it are the Python names. Both implementations produced the same `output.csv` (sha256 `4676156f...`). Where to find each Python module now:
+>
+> | Python module / script (as named in the text below) | C# file |
+> |---|---|
+> | `main.py` | `src/Auditor.Cli/Program.cs`, `src/Auditor.Cli/Cli.cs` |
+> | `auditor/classify.py` | `src/Auditor/Classify.cs` |
+> | `auditor/identity.py`, `auditor/dataset.py` | `src/Auditor/Identity.cs`, `Dataset.cs`, `Csv.cs` |
+> | `auditor/evidence/{router,load,loaders,logobs,logparse,pdfobs,records,imageobs,imagejobs}.py` | `src/Auditor/Evidence/{Router,Load,Loaders,LogObs,LogParse,PdfObs,Records,ImageObs,ImageJobs}.cs` |
+> | `auditor/link.py`, `discover.py`, `state.py`, `policy.py`, `audit.py` | `src/Auditor/Link.cs`, `Discover.cs`, `State.cs`, `Policy.cs`, `Audit.cs` |
+> | `auditor/schema.py`, `validate.py`, `outio.py`, `checkpoint.py` | `src/Auditor/Schema.cs`, `Validate.cs`, `OutputIo.cs`, `Checkpoint.cs` |
+> | `auditor/trace.py`, `explain.py`, `settings.py`, `versions.py`, `prices.py` | `src/Auditor/Trace.cs`, `Explain.cs`, `Settings.cs`, `Versions.cs`, `Prices.cs` |
+> | `auditor/llm.py`, `readings.py` | `src/Auditor/Llm.cs` (+ `ModelApi.cs`, `AnthropicModelClient.cs`), `Readings.cs` |
+> | `auditor/agent/{loop,tools,gate,prompts}.py` | `src/Auditor/Agent/{AgentImageReader,AgentTools,Gate,PromptFile}.cs` |
+> | `evaluation/{score,baseline,holdout,extra_cases,agent_proofs,router_equivalence,show_image_readings,usage_report,evaluation_report,performance_report}.py`, `tools/{package,final_check,mutation_check}.py` | `tools/Auditor.Tools/{Scorer,Baselines,Holdout,ExtraCases,AgentProofs,RouterEquivalence,ShowReadings,UsageReport,EvaluationReport,PerformanceReport,Packager,FinalCheck,MutationCheck}.cs` |
+> | `tests/test_*.py` (unittest) | `tests/Auditor.Tests/*Tests.cs` (xUnit) |
+> | `evaluation/{phase2_report,phase3_report,phase4_report,coverage,edge_sweep,mdfmt}.py`, `tools/{determinism_check,profile_run}.py` | retired (see the note at the top of each generated report); `DeterminismTests`, `EdgeRegressionsTests` and `PerformanceReport.cs` replace what is still needed |
+
+
 Source of truth: `AGENTS.md` §6 and `problem_statement.md`. This file records what the *data* additionally implies.
 Principle: **the model describes, deterministic code decides.** An LLM/VLM may only turn an image into schema-validated JSON facts.
 
@@ -90,7 +109,7 @@ For each resource: among observations with `captured_at <= audit_at` take the **
 
 Modules under `code/auditor/`: `classify.py` (request meaning) - `identity.py` (time-aware resolver, hashes) - `evidence/{records,logparse,logobs,loaders,pdfobs,imageobs,load}.py` (every format -> `Obs`) -
 `link.py` (exact-identifier links, link times) - `discover.py` (timeline discovery of id-less accounts / anonymized analytics) - `state.py` (window + latest-file rule) - `policy.py` (deletion_rules.csv -> verdict) -
-`audit.py` (case assembly, citation fallbacks) - `schema.py`/`validate.py`/`outio.py` (contract) - `llm.py` (only model access). Entry point: `python3 code/main.py`.
+`audit.py` (case assembly, citation fallbacks) - `schema.py`/`validate.py`/`outio.py` (contract) - `llm.py` (only model access). Entry point: `dotnet run -c Release --project code/src/Auditor.Cli --`.
 The inferred rules of sections 4-7 are implemented as written; deviations and measurements are in NOTES.md section 10.
 
 ## 11. As built (Phase 3 additions)

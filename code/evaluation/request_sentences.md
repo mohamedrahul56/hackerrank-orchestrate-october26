@@ -12,7 +12,7 @@ Generated while preparing the Phase 2 classifier. Class meanings:
 
 Request-level rule used by the classifier: a request is a deletion audit iff it contains at least one un-negated DELETE or AUDIT clause; otherwise NOT_APPLICABLE.
 
-The classes below are my manual reading of the sentences; `tests/test_classify.py` checks the classifier against them (sentence level and request level).
+The classes below are my manual reading of the sentences; `ClassifyTests` checks the classifier against them (sentence level and request level).
 
 ## COURTESY (13)
 

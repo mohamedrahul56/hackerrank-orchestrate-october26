@@ -45,6 +45,14 @@ public sealed class AuditConfig
 ///   6 findings / remediation / verification      (this class)      canonical order via Schema.Canonicalize
 ///   7 validate                                   (Validator)    a bad row never crashes the run
 /// </summary>
+/// <summary>What the activity-timeline discovery of accounts was given (kept so that the hold-out measurement can re-run the real discovery with some links hidden).</summary>
+public sealed record DiscoveryInputs(List<CaseKey> Cases, Dictionary<string, HashSet<string>> Explicit, Dictionary<string, HashSet<string>> Owners,
+                                     Dictionary<string, HashSet<string>> Cohort, Dictionary<string, List<Event>>? OwnEvents);
+
+/// <summary>What the discovery of anonymized analytics records was given.</summary>
+public sealed record AnalyticsInputs(List<CaseKey> Cases, List<Event> Events, HashSet<string> Anonymized, Dictionary<string, List<(DateTime T, int K)>> Chain,
+                                     Func<CaseKey, Event, bool> Foreign, Dictionary<string, DateTime>? AccountTime, Tunables Tune);
+
 public sealed class CaseAuditor
 {
     private static readonly Dictionary<string, int> ChainPosition = new(StringComparer.Ordinal) { ["REDACT_RECORD"] = 1, ["DISABLE_DATA_FLOW"] = 2, ["BLOCK_RESTORE"] = 3 };
@@ -67,6 +75,8 @@ public sealed class CaseAuditor
     public Dictionary<string, Classification> Classification { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, HashSet<string>> Users { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, Assignment> AccountAsg { get; private set; } = new(StringComparer.Ordinal);
+    public DiscoveryInputs? DiscInputs { get; private set; }
+    public AnalyticsInputs? AnalyticsIn { get; private set; }
     public Dictionary<string, HashSet<string>> KnownAccounts { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, Assignment> AnalyticsAsg { get; private set; } = new(StringComparer.Ordinal);
 
@@ -178,6 +188,7 @@ public sealed class CaseAuditor
         }
         Timings["discovery.case_inputs"] = sw.Elapsed.TotalSeconds;
         var own = Cfg.UseTimingHeuristics ? Stage("discovery.own_events", () => cases.ToDictionary(c => c.CaseId, OwnEvents, StringComparer.Ordinal)) : null;
+        DiscInputs = new DiscoveryInputs(cases, explicitLinks, owners, cohort, own);
         AccountAsg = Stage("discovery.assign_accounts", () => Discover.AssignAccounts(cases, Events, explicitLinks, owners, Cfg.UseCohortFilter ? cohort : null, own, Cfg.Tune));
         sw.Restart();
         var anonymized = Base.Obs.Where(o => o.Category == "ANALYTICS_PROFILE" && o.State == "ANONYMIZED" && o.Idents.Count == 0).Select(o => o.Resource).ToHashSet(StringComparer.Ordinal);
@@ -194,7 +205,9 @@ public sealed class CaseAuditor
         var accountTime = Cfg.UseTimingHeuristics
             ? AccountAsg.Where(kv => kv.Value.Resource is not null && kv.Value.Event is not null).ToDictionary(kv => kv.Key, kv => kv.Value.Event!.T, StringComparer.Ordinal)
             : null;
-        AnalyticsAsg = Discover.AssignAnonymizedAnalytics(cases.Where(c => !hasOwn.Contains(c.CaseId)).ToList(), Events, anonymized, chain, ForeignChain, accountTime, Cfg.Tune);
+        var analyticsCases = cases.Where(c => !hasOwn.Contains(c.CaseId)).ToList();
+        AnalyticsIn = new AnalyticsInputs(analyticsCases, Events, anonymized, chain, ForeignChain, accountTime, Cfg.Tune);
+        AnalyticsAsg = Discover.AssignAnonymizedAnalytics(analyticsCases, Events, anonymized, chain, ForeignChain, accountTime, Cfg.Tune);
         Timings["discovery.analytics"] = sw.Elapsed.TotalSeconds;
     }
 

@@ -39,7 +39,7 @@ public static class Discover
         return output;
     }
 
-    private static bool InWindow(Event e, DateTime r, (TimeSpan, TimeSpan) win) => r + win.Item1 <= e.T && e.T <= r + win.Item2;
+    public static bool InWindow(Event e, DateTime r, (TimeSpan, TimeSpan) win) => r + win.Item1 <= e.T && e.T <= r + win.Item2;
 
     /// <summary>
     /// Seconds-phase regularity inside one case. Measured on the accounts that ARE linked explicitly (188 cases): for a given event kind (event_type, target) the second-of-minute of a case's

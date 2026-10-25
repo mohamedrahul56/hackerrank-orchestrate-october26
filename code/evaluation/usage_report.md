@@ -7,7 +7,7 @@ Everything below is computed from that log; no figure is typed in by hand.
 * provisional rows in that output (9): case_34, case_35, case_39, case_50, case_52, case_53, case_55, case_61, case_63
 
 **No model calls were made in this run: 0 calls, 0 input tokens, 0 output tokens.** Every decision, including every status and every step, was made by deterministic code. The vision path (`claude-haiku-5-5`, fallback `claude-sonnet-5-5`, configured but not called) was **tested only with fakes** because no API key was available; the screenshots were not read, which is why the rows that depend only on a screenshot are provisional.
-**Agent layer built and tested with fakes only; 0 calls, 0 tokens, no cost.** The opt-in tool-calling reader (`--images agent`, `auditor/agent`, report `agent_layer_report.md`) was never run against a real model.
+**Agent layer built and tested with fakes only; 0 calls, 0 tokens, no cost.** The opt-in tool-calling reader (`--images agent`, `Auditor/Agent`, report `agent_layer_report.md`) was never run against a real model.
 
 ## Providers and models
 
@@ -35,9 +35,3 @@ Everything below is computed from that log; no figure is typed in by hand.
 ## Cache and failures
 
 * live calls: 0; cache hits: 0; calls that failed schema validation twice: 0 (those images fall back to the deterministic result and are listed in the run notes)
-
-## Appendix: the experiment with a readings file (not the submitted run)
-
-* `python3 code/main.py --images file` read 11 screenshots from a readings file instead of a model: **0 model calls, 0 input tokens, 0 output tokens, no cost**. It produced `run_readings_1.csv` (sha256 `f86e7d6ff43019c2...`), status counts COMPLETE 152, INCOMPLETE 356, NOT_APPLICABLE 10, provisional rows 0.
-* readings source: agent_readings.json sha256 1e4afa4bd241a94ab7f0d277578cafa21ce314bf9f7814bc9ab5d55845ac699b, 11 readings, prompt img-v1, source: claude-code agent vision (model claude-sonnet-5-5), transcribed in session; not a model API call made by the auditor
-* The submitted `output.csv` was produced by the run above, without the readings file; the differences between the two outputs are explained in section 5.4 of `evaluation_report.md`.

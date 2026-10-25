@@ -1,5 +1,8 @@
 # Later-evidence link log (decision D3)
 
+> **Frozen record.** Measured on the original Python implementation (last Python commit `277dfe4`) by `the Python run with `--later-evidence-log``, which was retired in the port to C# / .NET 10 (CHANGELOG row 53) together with the other Python-only measurement scripts. The C# code keeps the same rule (late evidence may only link, never decide: `LaterEvidenceInvariant`). The numbers below are not re-measured on the C# code and are kept as history; `the log itself was not regenerated`.
+
+
 Evidence captured AFTER a case's audit_at was used only to tie a resource to the user. Each row lists the resource, the file or
 activity row that linked it, when that was captured, the case's audit_at, and the steps this link ADDED to the answer
 (computed by diffing the run with and without later-evidence linking). It never supplies state and is never cited.
