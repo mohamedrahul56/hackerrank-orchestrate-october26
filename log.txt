@@ -666,3 +666,24 @@ branch=claude/exciting-lamport-yrcfpx
 repo_root=/home/user/hackerrank-orchestrate-october26
 worktree=main
 parent_agent=none
+
+## [2026-10-25T06:40:00Z] Go: router, tool and prompt craft, robustness, tooling, claim map, reports, zip
+
+User Prompt (verbatim, secrets redacted):
+go. Decisions: (1) delete classifier_llm and its tests, note it in the CHANGELOG; (2) router decisions stay in code, the model never chooses a route, and the model only drives perception for images when a reader is configured; (3) do the items in your order: router, tool and prompt craft, robustness, tooling and cleanup, then a short claim-to-code map; (4) for the LLM method rename, keep the diff small and mechanical; (5) commit each item separately, and after each run the tests, the sample scorer and the default-run hash 4676156f…, reverting on any regression; the router must also prove old and new loaders give identical observations for all 94 files; (6) no key is available, so claim only "tested with fakes only, 0 calls, 0 tokens"; (7) finish with updated README and reports, a rebuilt code.zip, final_check.py and a short summary of what each item changed in the code. Stop after the final summary.
+
+Agent Response Summary:
+Removed the unwired classifier LLM tie-breaker; added evidence/router.py (per-file route decided by code, old and new loaders identical on all 94 files in three configurations); documented both tool schemas, zoom coordinate semantics, vocabulary injected from code and a worked example (prompt agent-img-v2); made retry status-based with a fatal stop on 401/403, a token budget, Pillow errors as tool errors, logged spend, size limits and public LLM methods; added ruff and mypy configuration with all findings fixed and make lint; added a test-checked claim-to-code map. Each step ran the tests, the sample scorer and the default-run hash (4676156f…, unchanged); 429 tests pass. Everything about the model path is tested with fakes only: 0 calls, 0 tokens.
+
+Actions:
+* Created code/auditor/evidence/router.py, code/evaluation/router_equivalence.py, code/pyproject.toml, code/requirements-dev.txt, tests test_router, test_agent_craft, test_llm_policy, test_agent_robustness, test_static_checks, test_claims_map
+* Edited llm.py, agent/{loop,tools,gate}.py, evidence/{load,records,imagejobs,pdfobs,loaders}.py, classify.py, audit.py, settings.py, main.py, prompts, Makefile, README, ARCHITECTURE (D6), NOTES, CHANGELOG (47-52), INTERVIEW_PREP
+* Regenerated the reports, ran final_check
+
+Context:
+tool=Claude Code
+model=claude-sonnet-5-5
+branch=claude/exciting-lamport-yrcfpx
+repo_root=/home/user/hackerrank-orchestrate-october26
+worktree=main
+parent_agent=none
