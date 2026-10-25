@@ -8,13 +8,14 @@ runs the loop and enforces the limits:
   repeated call    the same tool with the same input a second time is answered from memory once; a third time ends the loop
   invalid submit   one re-ask (a tool error that says what was wrong), then the loop ends
 
-Transport problems (429, timeouts, 5xx) are retried with back-off inside `LLM._send`; refusals, an invalid or missing submission, a cap, a repeated call or an unexpected tool all end in a
+Transport problems (429, timeouts, 5xx) are retried with back-off inside `LLM.send`; refusals, an invalid or missing submission, a cap, a repeated call or an unexpected tool all end in a
 `AgentFailure`, which is a `SchemaError`: the screenshot is then "not read", exactly like a missing key, and the deterministic result stands. A valid submission is cached (key: image bytes,
 both prompt files, tool definitions, model, pipeline and rules versions) BEFORE the gate, so a change in a gate rule never needs a new model call. No API key, no network and no real
 model are involved in any test of this module: they use a fake client.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -34,7 +35,11 @@ SOURCE = "image:agent"
 
 
 class AgentFailure(SchemaError):
-    """The loop ended without a usable submission (reason in the message)."""
+    """The loop ended without a usable submission (reason in the message). `trace` holds what the loop had already spent, so that the usage log is true even for a failure."""
+
+    def __init__(self, reason: str, trace: dict | None = None):
+        super().__init__(reason)
+        self.trace = dict(trace or {})
 
 
 @dataclass(frozen=True)
@@ -70,27 +75,32 @@ class AgentImageReader:
         if file_id is None:                                  # gate rule G2: only screenshots of the manifest are read
             raise LLMUnavailable(f"{path.name} is not an evidence file of the manifest")
         data = path.read_bytes()
-        import hashlib
         fhash = hashlib.sha256(data).hexdigest()
         raw: dict | None = None
         last: Exception | None = None
         for model in (self.llm.model, self.llm.fallback_model):
             key = self._key(fhash, model)
-            with self.llm._key_lock(key):                    # the same screenshot twice at once costs one reading
-                cached = self.llm._cache_get(key)
+            with self.llm.key_lock(key):                    # the same screenshot twice at once costs one reading
+                cached = self.llm.cache_get(key)
                 if cached is not None:
                     self.llm.usage.add({"ts": _now(), "provider": "anthropic", "model": model, "kind": "agent_image", "file": path.name, "file_sha256": fhash, "cache_hit": True,
                                         "input_tokens": 0, "output_tokens": 0, "calls": 0})
                     raw = cached
                     break
+                trace = _new_trace()
                 try:
-                    raw, trace = self._run(model, path, data)
+                    raw = self._run(model, path, data, trace)
+                except LLMUnavailable as e:                  # transport gave up or a fatal stop: what the earlier turns cost is still logged, then the error goes up
+                    if trace["api_calls"]:                   # at least one turn was paid for (no key or an immediate refusal is not a failed loop)
+                        self.llm.usage.add({**self._row(path, fhash, model, trace), "error": f"model unavailable during the loop: {e}"})
+                        self._count("failed")
+                    raise
                 except AgentFailure as e:
                     last = e
-                    self.llm.usage.add({**self._row(path, fhash, model, e.trace if hasattr(e, "trace") else {}), "error": f"agent loop ended without a reading: {e}"})
+                    self.llm.usage.add({**self._row(path, fhash, model, e.trace), "error": f"agent loop ended without a reading: {e}"})
                     self._count("failed")
                     continue
-                self.llm._cache_put(key, raw)
+                self.llm.cache_put(key, raw)
                 self.llm.usage.add(self._row(path, fhash, model, trace))
                 break
         if raw is None:
@@ -107,13 +117,13 @@ class AgentImageReader:
         return result.reading
 
     # ------------------------------------------------------------------ the loop
-    def _run(self, model: str, path: Path, data: bytes) -> tuple[dict, dict]:
+    def _run(self, model: str, path: Path, data: bytes, trace: dict[str, Any]) -> dict:
+        """The loop proper. `trace` is filled as it goes (by the caller's dict, so it survives any exception); returns the submitted reading."""
         lim = self.limits
-        trace: dict[str, Any] = {"api_calls": 0, "tool_calls": 0, "zooms": 0, "input_tokens": 0, "output_tokens": 0, "cache_read": 0, "latency_s": 0.0}
         try:
             width, height = tools.image_size(path)
         except tools.ToolError as e:
-            raise _fail(f"cannot read the image header: {e}", trace)
+            raise AgentFailure(f"cannot read the image header: {e}", trace) from e
         specs = tools.tool_specs()
         zoom_on = any(t["name"] == "zoom_region" for t in specs)
         task = self.task.fill(width=width, height=height, max_zooms=lim.max_zooms if zoom_on else 0, id_families=tools.id_families())
@@ -125,7 +135,7 @@ class AgentImageReader:
         for _ in range(lim.max_iterations):
             if self._clock() - started > lim.wall_seconds:
                 raise _fail(f"wall-clock budget of {lim.wall_seconds:g} s used up", trace)
-            resp, u = self.llm._send(model=model, max_tokens=4000, system=self.system.text, tools=specs, output_config={"effort": "low"}, messages=messages)
+            resp, u = self.llm.send(model=model, max_tokens=4000, system=self.system.text, tools=specs, output_config={"effort": "low"}, messages=messages)
             trace["api_calls"] += 1
             for k in ("input_tokens", "output_tokens", "cache_read"):
                 trace[k] += int(u.get(k, 0) or 0)
@@ -155,10 +165,10 @@ class AgentImageReader:
                     except SchemaError as e:
                         invalid += 1
                         if invalid > lim.max_resubmits:
-                            raise _fail(f"invalid submission twice ({str(e)[:120]})", trace)
+                            raise _fail(f"invalid submission twice ({str(e)[:120]})", trace) from e
                         results.append(_err(tu, f"submission rejected: {str(e)[:200]}. Call submit_reading again with a structure that fits the schema."))
                         continue
-                    return args, trace
+                    return args
                 sig = name + json.dumps(args, sort_keys=True, default=str)
                 if sig in seen:
                     repeats += 1
@@ -193,7 +203,7 @@ class AgentImageReader:
 
     def _row(self, path: Path, fhash: str, model: str, trace: dict) -> dict:
         u = {"input_tokens": trace.get("input_tokens", 0), "output_tokens": trace.get("output_tokens", 0), "cache_read": trace.get("cache_read", 0), "latency_s": trace.get("latency_s", 0.0)}
-        row = self.llm._usage_row("agent_image", path, fhash, model, u, max(trace.get("api_calls", 1) - 1, 0))
+        row = self.llm.usage_row("agent_image", path, fhash, model, u, max(trace.get("api_calls", 1) - 1, 0))
         row.update({"calls": trace.get("api_calls", 0), "tool_calls": trace.get("tool_calls", 0), "zooms": trace.get("zooms", 0)})
         return row
 
@@ -206,10 +216,12 @@ class AgentImageReader:
             self.stats[what] += 1
 
 
+def _new_trace() -> dict[str, Any]:
+    return {"api_calls": 0, "tool_calls": 0, "zooms": 0, "input_tokens": 0, "output_tokens": 0, "cache_read": 0, "latency_s": 0.0}
+
+
 def _fail(reason: str, trace: dict) -> AgentFailure:
-    e = AgentFailure(reason)
-    e.trace = dict(trace)                                    # tokens already spent are still logged
-    return e
+    return AgentFailure(reason, trace)                       # tokens already spent are still logged
 
 
 def _err(tu: Any, text: str) -> dict:

@@ -71,6 +71,7 @@ class Settings:
     agent_zoom_max_px: int = 1200         # [agent] longest side of a returned zoom, in pixels
     max_concurrency: int = 4              # screenshots read at the same time (1 = sequential); does not change the answer
     timeout_seconds: float = 60.0         # per model request; does not change the answer
+    max_run_tokens: int = 0               # 0 = no limit; else no model request starts once the run has used this many input + output tokens
 
     def fingerprint(self) -> str:
         """Hash of everything that can change the answer. cache_dir is excluded (a path); the model names count only when images are read."""
@@ -78,7 +79,7 @@ class Settings:
         for k in ("cache_dir", "max_concurrency", "timeout_seconds", "readings_file"):     # how readings are fetched (the readings' content is in the resume key), not a setting of the answer
             d.pop(k, None)
         if self.images in ("off", "file"):
-            d.pop("model", None), d.pop("fallback_model", None)
+            d.pop("model", None), d.pop("fallback_model", None), d.pop("max_run_tokens", None)          # no model is called: a token budget cannot matter
         if self.images != "agent":                                                                # the loop limits matter only when the loop runs
             for k in [k for k in d if k.startswith("agent_")]:
                 d.pop(k)
@@ -97,7 +98,7 @@ def _to_plain(s: Any) -> dict:
 _TOP = {f.name for f in fields(Settings)} - {"tune"}
 _TUNE = {f.name for f in fields(Tunables)}
 _SECTIONS = {"pipeline": {"later_linking", "discovery", "timing_heuristics", "cohort_filter", "provisional_rows"},
-             "llm": {"images", "readings_file", "model", "fallback_model", "cache_dir", "max_concurrency", "timeout_seconds"},
+             "llm": {"images", "readings_file", "model", "fallback_model", "cache_dir", "max_concurrency", "timeout_seconds", "max_run_tokens"},
              "discovery": {"account_window_minutes", "analytics_window_minutes", "phase_margin", "analytics_min_llr", "chain_gaps_seconds", "chain_tolerance_seconds"},
              "audit": {"later_link_max_days"},
              "agent": {"max_iterations", "max_tool_calls", "max_zooms", "wall_seconds", "zoom_max_px"}}
@@ -148,6 +149,8 @@ def _validate(s: Settings) -> Settings:
         raise SettingsError(f"llm.max_concurrency: must be between 1 and 16, got {s.max_concurrency}")
     if s.timeout_seconds <= 0:
         raise SettingsError("llm.timeout_seconds: must be positive")
+    if s.max_run_tokens < 0:
+        raise SettingsError(f"llm.max_run_tokens: must be 0 (no limit) or positive, got {s.max_run_tokens}")
     if t.phase_margin < 0 or t.analytics_min_llr < 0 or t.chain_tolerance_seconds < 0 or t.later_link_max_days < 0:
         raise SettingsError("discovery/audit numbers must not be negative")
     if min(t.chain_gaps_seconds) <= 0:

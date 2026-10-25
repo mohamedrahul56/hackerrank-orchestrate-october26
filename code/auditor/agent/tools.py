@@ -13,7 +13,7 @@ import json
 import logging
 from pathlib import Path
 
-from ..evidence.imageobs import SCHEMA as READING_SCHEMA, state_from_description
+from ..evidence.imageobs import MAX_ITEMS, MAX_RECORDS, SCHEMA as READING_SCHEMA, state_from_description
 from ..evidence.records import SYSTEM_BY_PREFIX
 
 log = logging.getLogger(__name__)
@@ -25,19 +25,20 @@ except ImportError:                                           # pragma: no cover
 
 UNKNOWN_FIELDS = ("resource_id", "emails", "user_ids", "phones", "status_words", "aliases", "shows_direct_identifiers", "selected")
 MIN_SIDE = 32                                                 # a crop smaller than this shows nothing worth enlarging
+MAX_TEXT = 200                                                # longest string the model may write into any field (the screen title is cut to 80 by the gate)
 MAX_PIXELS = 4_000_000                                        # bounds the work for one zoom (the crop's area in original pixels)
 
 FIELD_DOCS = {
     "screen": "A short title of the screen as printed (for example 'Export manager'); at most 80 characters. Only a label for the run notes: no decision reads it.",
-    "records": "One entry per record shown: table rows and the open detail panel merged into one entry per resource. Do not add a record that is not on the screen.",
+    "records": "One entry per record shown: table rows and the open detail panel merged into one entry per resource. Do not add a record that is not on the screen. At most 100 records.",
     "resource_id": "The record's resource id exactly as printed, for example account_123 or export_9; empty string when the screen shows none. Never build an id from other text.",
     "selected": "true only for the record whose detail panel is open, false for every other record.",
-    "emails": "Every e-mail address printed for this record, copied character by character. Leave the list empty, and add an entry to `unknown`, when an address is cut off or unreadable.",
+    "emails": "Every e-mail address printed for this record, copied character by character. At most 20. Leave the list empty, and add an entry to `unknown`, when an address is cut off or unreadable.",
     "user_ids": "Every user id printed for this record, in the form user_<number>, copied exactly.",
     "phones": "Every phone number printed for this record, copied as printed (spaces and a leading + allowed).",
     "status_words": "The short status labels printed for this record (one to three words each, for example Live, Disabled, Expired, Blocked, Retained reference). Labels only: no sentences.",
     "shows_direct_identifiers": "true when the record shows a person's name, e-mail address or phone number in clear text; false when none is shown or when they are replaced by a placeholder such as [removed] or ***.",
-    "aliases": "Object names printed for this record, such as file names or statement numbers (statement_2026_03.pdf); they let code tie a record that shows no id to a catalogued resource.",
+    "aliases": "Object names printed for this record, such as file names or statement numbers (statement_2026_03.pdf); they let code tie a record that shows no id to a catalogued resource. At most 20.",
     "unknown": "Fields you could not read or that are not shown, one entry each. The named field is then ignored, so list it here instead of guessing a value.",
     "record_index": "Position of the record in `records`, counting from 0.",
     "field": "The field of that record that is unknown.",
@@ -67,6 +68,22 @@ _SUBMIT_BASE["required"] = ["screen", "records"]
 _SUBMIT_BASE["properties"]["unknown"] = {"type": "array", "items": {
     "type": "object", "additionalProperties": False, "required": ["record_index", "field", "reason"],
     "properties": {"record_index": {"type": "integer"}, "field": {"type": "string", "enum": list(UNKNOWN_FIELDS)}, "reason": {"type": "string"}}}}
+
+
+def _bound(node: dict) -> None:
+    """Size limits on the submission (the shared reading schema has none): lists and strings the model writes cannot be arbitrarily long. The limits equal what `imageobs.sanitize` keeps."""
+    if node.get("type") == "array":
+        node["maxItems"] = MAX_RECORDS if "properties" in node.get("items", {}) else MAX_ITEMS
+    if node.get("type") == "string" and "enum" not in node:
+        node["maxLength"] = MAX_TEXT
+    for sub in node.get("properties", {}).values():
+        _bound(sub)
+    if isinstance(node.get("items"), dict):
+        _bound(node["items"])
+
+
+_bound(_SUBMIT_BASE["properties"]["records"])                      # not `screen`: a long title is cut to 80 characters by the gate (G7), it does not cost the whole reading
+_bound(_SUBMIT_BASE["properties"]["unknown"])
 SUBMIT_SCHEMA: dict = _document(_SUBMIT_BASE, FIELD_DOCS)
 
 ZOOM_SCHEMA: dict = _document({
@@ -137,20 +154,25 @@ def zoom_region(path: Path, args: dict, max_px: int = 1200) -> tuple[bytes, str]
     if Image is None:
         raise ToolError("zoom_region is not available (Pillow is not installed)")
     x, y, w, h = (args[k] for k in ("x", "y", "width", "height"))
-    with Image.open(path) as im:
-        W, H = im.size
-        if w < MIN_SIDE or h < MIN_SIDE:
-            raise ToolError(f"the rectangle must be at least {MIN_SIDE} x {MIN_SIDE} pixels, got {w} x {h}")
-        if x < 0 or y < 0 or x + w > W or y + h > H:
-            raise ToolError(f"the rectangle ({x}, {y}, {w} x {h}) is not inside the screenshot ({W} x {H} pixels)")
-        if w * h > MAX_PIXELS:
-            raise ToolError("the rectangle is too large; zoom into a smaller area")
-        crop = im.convert("RGB").crop((x, y, x + w, y + h))
-    scale = min(max_px / max(w, h), 4.0)
-    if scale > 1:
-        crop = crop.resize((max(1, round(w * scale)), max(1, round(h * scale))), Image.LANCZOS)
-    buf = io.BytesIO()
-    crop.save(buf, format="PNG")
+    try:
+        with Image.open(path) as im:
+            W, H = im.size
+            if w < MIN_SIDE or h < MIN_SIDE:
+                raise ToolError(f"the rectangle must be at least {MIN_SIDE} x {MIN_SIDE} pixels, got {w} x {h}")
+            if x < 0 or y < 0 or x + w > W or y + h > H:
+                raise ToolError(f"the rectangle ({x}, {y}, {w} x {h}) is not inside the screenshot ({W} x {H} pixels)")
+            if w * h > MAX_PIXELS:
+                raise ToolError("the rectangle is too large; zoom into a smaller area")
+            crop = im.convert("RGB").crop((x, y, x + w, y + h))
+        scale = min(max_px / max(w, h), 4.0)
+        if scale > 1:
+            crop = crop.resize((max(1, round(w * scale)), max(1, round(h * scale))), Image.LANCZOS)
+        buf = io.BytesIO()
+        crop.save(buf, format="PNG")
+    except ToolError:
+        raise
+    except (OSError, SyntaxError, ValueError, Image.DecompressionBombError) as e:      # a truncated or corrupt PNG, a decompression bomb: the model hears about it, the loop goes on
+        raise ToolError(f"the screenshot cannot be cropped ({type(e).__name__}); read it as it is and call submit_reading") from e
     return buf.getvalue(), "image/png"
 
 

@@ -250,12 +250,12 @@ class Caps(Base):
 
     def test_wall_clock_budget(self):
         rd = self.reader([msg(use("zoom_region", ZOOM, 1)), msg(use("zoom_region", {**ZOOM, "x": 60}, 2)), submit(i=3)], AgentLimits(wall_seconds=5))      # one request per model, then the budget is gone
-        orig = rd.llm._send
+        orig = rd.llm.send
 
         def slow(**kw):
             self.now[0] += 10
             return orig(**kw)
-        rd.llm._send = slow
+        rd.llm.send = slow
         with self.assertRaises(AgentFailure) as cm:
             self.read(rd)
         self.assertIn("wall-clock", str(cm.exception))

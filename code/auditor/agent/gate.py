@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 
 from ..evidence.imageobs import SCHEMA as READING_SCHEMA, state_from_description
 from ..evidence.records import EMAIL_RE, USER_RE, norm_phone
-from ..llm import SchemaError, validate_schema
+from ..llm import validate_schema
 from ..schema import valid_resource_id
 from .tools import SUBMIT_SCHEMA
 

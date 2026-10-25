@@ -129,7 +129,7 @@ def proofs() -> list[tuple[str, str, str, str]]:
     return rows
 
 
-TEST_MODULES = ["tests.test_agent_prompts", "tests.test_agent_gate", "tests.test_agent_tools", "tests.test_agent_loop", "tests.test_agent_cli", "tests.test_router"]
+TEST_MODULES = ["tests.test_agent_prompts", "tests.test_agent_gate", "tests.test_agent_tools", "tests.test_agent_loop", "tests.test_agent_cli", "tests.test_agent_craft", "tests.test_agent_robustness", "tests.test_llm_policy", "tests.test_router"]
 
 
 def run_tests() -> list[tuple[str, int, int, int]]:

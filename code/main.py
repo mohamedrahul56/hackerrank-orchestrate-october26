@@ -39,7 +39,7 @@ def main(argv: list[str] | None = None) -> int:
 def _make_llm(st, stamp, usage_path):
     from auditor.llm import LLM
     return LLM(cache_dir=Path(st.cache_dir) if st.cache_dir else None, usage_path=usage_path, model=st.model, fallback_model=st.fallback_model, stamp=stamp,
-               timeout_s=st.timeout_seconds)
+               timeout_s=st.timeout_seconds, max_run_tokens=st.max_run_tokens)
 
 
 DEFAULT_READINGS = ROOT / "code" / "out" / "agent_readings.json"

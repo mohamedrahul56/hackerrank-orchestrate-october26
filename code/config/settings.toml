@@ -57,6 +57,9 @@ cache_dir = ""
 max_concurrency = 4
 # Seconds before one model request is given up; a timeout is retried like a 429, up to 4 tries per call.
 timeout_seconds = 60.0
+# Token budget of one run (input + output, all screenshots, all attempts); 0 = no limit. Once it is reached no further request starts: the remaining screenshots are "not read"
+# and the deterministic result stands. A request already in flight when the budget is crossed completes, so the total can exceed the budget by one request per worker.
+max_run_tokens = 0
 
 [agent]
 # Limits of the screenshot-reading loop (used only with images = "agent"). The loop is: look, zoom where text is too small, submit once; code enforces every limit and a
