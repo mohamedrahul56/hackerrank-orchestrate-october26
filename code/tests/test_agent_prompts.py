@@ -35,7 +35,7 @@ class PromptFiles(unittest.TestCase):
         import re
         for p in prompts.PROMPT_DIR.glob("*.md"):
             t = p.read_text(encoding="utf-8")
-            self.assertIsNone(re.search(r"@[a-z0-9-]+\.[a-z]{2,}|case_\d+|evidence_\d+", t), p.name)
+            self.assertIsNone(re.search(r"@(?!example\.test)[a-z0-9-]+\.[a-z]{2,}|case_\d+|evidence_\d+", t), p.name)
 
     def test_loader_rejects_a_file_without_front_matter_or_body(self):
         with tempfile.TemporaryDirectory() as d:

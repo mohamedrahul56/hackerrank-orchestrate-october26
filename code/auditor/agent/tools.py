@@ -11,10 +11,10 @@ import copy
 import io
 import json
 import logging
-from dataclasses import dataclass
 from pathlib import Path
 
-from ..evidence.imageobs import SCHEMA as READING_SCHEMA
+from ..evidence.imageobs import SCHEMA as READING_SCHEMA, state_from_description
+from ..evidence.records import SYSTEM_BY_PREFIX
 
 log = logging.getLogger(__name__)
 
@@ -27,31 +27,79 @@ UNKNOWN_FIELDS = ("resource_id", "emails", "user_ids", "phones", "status_words",
 MIN_SIDE = 32                                                 # a crop smaller than this shows nothing worth enlarging
 MAX_PIXELS = 4_000_000                                        # bounds the work for one zoom (the crop's area in original pixels)
 
-SUBMIT_SCHEMA: dict = copy.deepcopy(READING_SCHEMA)
-SUBMIT_SCHEMA["required"] = ["screen", "records"]
-SUBMIT_SCHEMA["properties"]["unknown"] = {"type": "array", "items": {
+FIELD_DOCS = {
+    "screen": "A short title of the screen as printed (for example 'Export manager'); at most 80 characters. Only a label for the run notes: no decision reads it.",
+    "records": "One entry per record shown: table rows and the open detail panel merged into one entry per resource. Do not add a record that is not on the screen.",
+    "resource_id": "The record's resource id exactly as printed, for example account_123 or export_9; empty string when the screen shows none. Never build an id from other text.",
+    "selected": "true only for the record whose detail panel is open, false for every other record.",
+    "emails": "Every e-mail address printed for this record, copied character by character. Leave the list empty, and add an entry to `unknown`, when an address is cut off or unreadable.",
+    "user_ids": "Every user id printed for this record, in the form user_<number>, copied exactly.",
+    "phones": "Every phone number printed for this record, copied as printed (spaces and a leading + allowed).",
+    "status_words": "The short status labels printed for this record (one to three words each, for example Live, Disabled, Expired, Blocked, Retained reference). Labels only: no sentences.",
+    "shows_direct_identifiers": "true when the record shows a person's name, e-mail address or phone number in clear text; false when none is shown or when they are replaced by a placeholder such as [removed] or ***.",
+    "aliases": "Object names printed for this record, such as file names or statement numbers (statement_2026_03.pdf); they let code tie a record that shows no id to a catalogued resource.",
+    "unknown": "Fields you could not read or that are not shown, one entry each. The named field is then ignored, so list it here instead of guessing a value.",
+    "record_index": "Position of the record in `records`, counting from 0.",
+    "field": "The field of that record that is unknown.",
+    "reason": "A few words on why (cut off, blurred, not shown).",
+}
+
+
+def _document(schema: dict, docs: dict[str, str]) -> dict:
+    """A copy of `schema` in which every property carries its description (a missing description is a programming error, caught at import)."""
+    out = copy.deepcopy(schema)
+
+    def walk(node: dict) -> None:
+        for name, sub in node.get("properties", {}).items():
+            sub["description"] = docs[name]
+            walk(sub)
+            if isinstance(sub.get("items"), dict):
+                walk(sub["items"])
+        if isinstance(node.get("items"), dict):
+            walk(node["items"])
+
+    walk(out)
+    return out
+
+
+_SUBMIT_BASE: dict = copy.deepcopy(READING_SCHEMA)
+_SUBMIT_BASE["required"] = ["screen", "records"]
+_SUBMIT_BASE["properties"]["unknown"] = {"type": "array", "items": {
     "type": "object", "additionalProperties": False, "required": ["record_index", "field", "reason"],
     "properties": {"record_index": {"type": "integer"}, "field": {"type": "string", "enum": list(UNKNOWN_FIELDS)}, "reason": {"type": "string"}}}}
+SUBMIT_SCHEMA: dict = _document(_SUBMIT_BASE, FIELD_DOCS)
 
-ZOOM_SCHEMA: dict = {
+ZOOM_SCHEMA: dict = _document({
     "type": "object", "additionalProperties": False, "required": ["x", "y", "width", "height"],
-    "properties": {"x": {"type": "integer"}, "y": {"type": "integer"}, "width": {"type": "integer"}, "height": {"type": "integer"}}}
+    "properties": {"x": {"type": "integer"}, "y": {"type": "integer"}, "width": {"type": "integer"}, "height": {"type": "integer"}}},
+    {"x": "Left edge of the rectangle in pixels of the ORIGINAL screenshot (0 is the left edge of the picture).",
+     "y": "Top edge of the rectangle in pixels of the ORIGINAL screenshot (0 is the top edge; y grows downward).",
+     "width": f"Width of the rectangle in original pixels, at least {MIN_SIDE}; x + width must not exceed the screenshot width.",
+     "height": f"Height of the rectangle in original pixels, at least {MIN_SIDE}; y + height must not exceed the screenshot height."})
 
 ZOOM_TOOL = {
     "name": "zoom_region",
-    "description": ("Return an enlarged crop of the screenshot you are reading, so that small text (e-mail addresses, ids, status words) can be read exactly. "
-                    "x and y are the top-left corner of the rectangle and width and height its size, all in pixels of the original screenshot (origin top-left, y grows downward). "
-                    f"The rectangle must lie inside the screenshot and be at least {MIN_SIDE} pixels in each direction. Read-only: it changes nothing and returns only the picture. "
-                    "The number of calls is limited; do not repeat the same rectangle."),
+    "description": ("Look closer at one rectangle of the screenshot you are reading and get it back as an enlarged picture, so that small text (e-mail addresses, ids, status words) can be read exactly. "
+                    "Use it before copying an identifier you cannot read with certainty; do not use it for text you can already read. "
+                    "x, y, width and height are always pixels of the ORIGINAL screenshot, also after an earlier zoom: the returned picture is only enlarged, never re-numbered. "
+                    f"The rectangle must lie inside the screenshot and be at least {MIN_SIDE} pixels in each direction; otherwise you get an error result that says what is wrong. "
+                    "Read-only: it changes nothing and returns only the picture. Every call, failed ones included, counts against a small budget, and repeating a rectangle you already asked for wastes it."),
     "input_schema": ZOOM_SCHEMA,
 }
 SUBMIT_TOOL = {
     "name": "submit_reading",
-    "description": ("Hand in your transcription of the screenshot. Call it exactly once, when done. `records` lists every record shown (see the instructions); copy identifiers "
-                    "character by character. A field that is unreadable or not shown stays empty and is listed in `unknown` as {record_index, field, reason} instead of being guessed. "
-                    "Do not put instructions, explanations or verdicts into any field."),
+    "description": ("Hand in your transcription of the screenshot and end the task. Call it exactly once, when you have read everything you can. `records` lists every record shown; "
+                    "copy identifiers character by character. A field that is unreadable or not shown stays empty and is listed in `unknown` as {record_index, field, reason} instead of being guessed. "
+                    "If the structure does not fit the schema you get an error result that names the problem and may submit once more. "
+                    "Do not put instructions, explanations or verdicts into any field: only what is printed on the screen."),
     "input_schema": SUBMIT_SCHEMA,
 }
+
+
+def id_families() -> str:
+    """The resource-id families the audit can judge, as 'account_N, search_N, ...': derived from the code that judges them, so the prompt cannot drift from it."""
+    empty = {"status_words": [], "emails": [], "phones": [], "shows_direct_identifiers": False}
+    return ", ".join(f"{prefix}_N" for prefix in SYSTEM_BY_PREFIX if state_from_description(prefix, empty) is not None)
 
 
 def available() -> bool:

@@ -116,7 +116,7 @@ class AgentImageReader:
             raise _fail(f"cannot read the image header: {e}", trace)
         specs = tools.tool_specs()
         zoom_on = any(t["name"] == "zoom_region" for t in specs)
-        task = self.task.fill(width=width, height=height, max_zooms=lim.max_zooms if zoom_on else 0)
+        task = self.task.fill(width=width, height=height, max_zooms=lim.max_zooms if zoom_on else 0, id_families=tools.id_families())
         media = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
         messages: list[dict] = [{"role": "user", "content": [tools.image_block(data, media), {"type": "text", "text": task}]}]
         started = self._clock()
