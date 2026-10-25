@@ -259,7 +259,7 @@ All numbers: `python3 code/evaluation/phase2_report.py` (-> `evaluation/phase2_r
 * `auditor/classify.py` labels CLAUSES (DELETE / AUDIT / SUPPORT / NEGATED / NONDELETE / CONTEXT / NEUTRAL) with small multilingual lexicons (en, es, fr, pt, de, it, ja, ko) and decides at request level:
   an un-negated DELETE/AUDIT clause -> deletion audit, even if other asks are present (your rule); a refusal ("do not close", "keep my account", "not asking for deletion") -> NOT_APPLICABLE;
   removal limited to marketing ("remove me from marketing lists only") -> NOT_APPLICABLE; narrated deletion + a request to act on it ("I was told it was deleted ... please handle them") -> deletion audit.
-  **Contradictory text and "mentions the deletion request but never states the wish" are AMBIGUOUS** -> optional LLM tie-breaker (validated enum, injection-safe) or, without one, conservatively NOT_APPLICABLE and logged.
+  **Contradictory text and "mentions the deletion request but never states the wish" are AMBIGUOUS** -> conservatively NOT_APPLICABLE and logged (the former optional LLM tie-breaker was removed: it was never wired to the command line and all 550 requests are decided by rules).
 * Results: sentence level **0 mismatches of 112**; request level **0 mismatches of 550** (540 deletion, 10 not applicable, 0 ambiguous); 8 classifier tests incl. 36 synthetic paraphrases (multilingual, mixed, partial-deletion, contradictory, injection-style).
 * Borderline sentences (decisions): "Remove me from marketing lists only" -> NONDELETE (verb scoped to marketing); "correct it without removing any of my records" -> NEGATED; "Do not close the account" -> NEGATED;
   "Please keep the account as it is" / "leave my profile ... in place" -> NEGATED; "I still use it, so please don't delete or change anything" -> NEGATED; "not a request to erase it" -> NEGATED;
@@ -319,7 +319,7 @@ All numbers: `python3 code/evaluation/phase2_report.py` (-> `evaluation/phase2_r
 6. Plain-string resource ordering: 1 of 499 rows differs from numeric order (risk is small).
 7. Several constants were set from the labeled data: windows (-90..+15 min accounts, -45..-5 analytics), chain gaps (390/449 s), the 7-day later-link bound. They are documented, unit-tested and measured, but tuned on 23 dev cases; the 9 not-tuned cases are the only semi-independent check and is small.
    **Honesty note**: the rules were first inferred in Phase 0 by reading all 32 gold answers, so these 9 cases are "not tuned against in Phase 2-3", which is weaker than a truly independent check, not "never seen".
-8. Classifier lexicons cover 8 languages; other languages end in AMBIGUOUS -> tie-breaker or conservative NOT_APPLICABLE. The LLM tie-breaker path is tested with fakes only.
+8. Classifier lexicons cover 8 languages; other languages end in AMBIGUOUS -> conservative NOT_APPLICABLE.
 9. `export download_available=false` is read as "absent" (assumption A8); a support message is "exposed" when any direct identifier is stored or quoted (A9); a hash-only opt-in contact is a SECONDARY_IDENTIFIER (A10).
 
 ### 10.9 Questions for the user (Phase 2 checkpoint)

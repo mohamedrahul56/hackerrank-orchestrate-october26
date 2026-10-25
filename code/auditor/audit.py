@@ -1,7 +1,6 @@
 """The case auditor: request -> (deletion_status, steps).
 
-Flow for one case (every decision here is code; the only model call is the optional image reader and the optional
-tie-breaker for ambiguous request wording):
+Flow for one case (every decision here is code; the only model call is the optional image reader):
 
   1 classify request_text                      (classify.py)    NOT_APPLICABLE -> []
   2 resolve current + historical identity      (identity.py)
@@ -63,7 +62,6 @@ class Config:
     use_timing_heuristics: bool = True   # the two second-of-minute heuristics (accounts: PhaseModel offsets; analytics: the 40/41 s offset). Dataset-specific, see README/NOTES 12
     tune: Tunables = field(default_factory=Tunables)   # numbers of the discovery and the late-link rule (config/settings.toml)
     image_workers: int = 1                # concurrent model calls when reading screenshots (output order is unaffected)
-    classifier_llm: object | None = None
     image_extractor: object | None = None
 
 
@@ -102,7 +100,7 @@ class Auditor:
                     if b.case_id and not b.reason.startswith("duplicate"):
                         self.bad_requests.setdefault(b.case_id, b.reason)
         with self._stage("classify_requests"):
-            self.classification = {cid: classify_request(r.request_text, self.cfg.classifier_llm) for cid, r in self.requests.items()}
+            self.classification = {cid: classify_request(r.request_text) for cid, r in self.requests.items()}
         with self._stage("resolve_identities"):
             self.users: dict[str, set[str]] = {cid: {p.user_id for p in self.res.resolve(r.email, r.requested_at)} for cid, r in self.requests.items()}
         self.account_asg: dict[str, dsc.Assignment] = {}

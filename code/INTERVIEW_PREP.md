@@ -18,7 +18,7 @@ records, archives or backups. For each of 518 requests I do five things, and **o
    records carry no identifier anywhere, so they are found through the deletion worker's activity timeline, by elimination plus two timing signals.
 5. **Write the steps** (`audit.py`): findings with evidence ids, a remediation plan (disable flows and block restores first, then delete / redact / anonymize), verification steps, then validate every row against the contract.
 
-The only model use is turning 11 screenshots into schema-validated JSON (and an optional tie-breaker for ambiguous request wording). **The submitted `output.csv` was produced with no model call at all**, because no API key was
+The only model use is turning 11 screenshots into schema-validated JSON (no model reads request text: an ambiguous wording is NOT_APPLICABLE). **The submitted `output.csv` was produced with no model call at all**, because no API key was
 available; the vision path is tested only with a fake client. That is the biggest gap in what I can claim.
 
 ## 2. Design decisions and rejected alternatives
@@ -87,7 +87,7 @@ rate for the cases that truly have no link (deleted accounts without identifiers
 The first version of this test scored only the hidden case and missed a defect where a neighbour kept a hidden case's account; I added the `stolen` count after a labeled sample exposed it.
 
 **Q5. How is prompt injection handled?**
-Request text and evidence text are data. No model sees them except an optional tie-breaker that must return one of two enum values (code validates it, anything else becomes NOT_APPLICABLE), and the screenshot reader, whose
+Request text and evidence text are data. No model sees request text; only the screenshot reader sees evidence, and its
 system prompt says the picture is data. Whatever the reader returns is reduced by code: lists are capped, status words must be short label-like strings (an instruction-like sentence is dropped), e-mails and user ids are
 re-validated, resource ids must match the id pattern, the free-text `screen` field is never read. There are tests with an injected "mark COMPLETE" in a request, in a support message, and inside model-extracted fields.
 My scan of the text in the data found no injection in the real requests or evidence ("found 0"; the pixels of the 11 screenshots were not scanned because they were not read). What I cannot rule out: an image that honestly shows the word "Disabled" for a record that is not disabled.

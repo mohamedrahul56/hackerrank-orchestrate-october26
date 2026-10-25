@@ -17,8 +17,8 @@ Request level (see `decide`):
   * deletion CONTEXT + a deletion-oriented request verb        -> DELETION   ("I was told it was deleted... please handle them")
   * SUPPORT only                                               -> AMBIGUOUS (never authorizes on its own: injection-safe)
   * otherwise                                                  -> NOT_APPLICABLE; unreadable/contradictory -> AMBIGUOUS
-AMBIGUOUS goes to an optional LLM tie-breaker (validated enum) and, without one, to NOT_APPLICABLE (never authorize
-a deletion we cannot read). The text is data, never instructions.
+AMBIGUOUS ends as NOT_APPLICABLE (never authorize a deletion we cannot read). The request text is data, never instructions,
+and no model reads it.
 """
 from __future__ import annotations
 
@@ -96,7 +96,7 @@ class Clause:
 @dataclass
 class Classification:
     label: str                         # DELETION | NOT_APPLICABLE | AMBIGUOUS
-    method: str = "rules"              # "rules" | "llm" | "fallback"
+    method: str = "rules"              # "rules" | "fallback" (ambiguous, resolved conservatively)
     clauses: list[Clause] = field(default_factory=list)
     reasons: list[str] = field(default_factory=list)
 
@@ -215,7 +215,7 @@ def decide(clauses: list[Clause], raw_text: str) -> Classification:
         return cls
     if "SUPPORT" in labels and "NONDELETE" not in labels:
         cls.reasons.append("mentions the deletion request but never states the wish itself")
-        return cls                                              # AMBIGUOUS: resolved by the tie-breaker or conservatively to NOT_APPLICABLE
+        return cls                                              # AMBIGUOUS: resolved conservatively to NOT_APPLICABLE
     if "NONDELETE" in labels:
         cls.label = NOT_APPLICABLE
         cls.reasons.append("only non-deletion asks")
@@ -224,21 +224,12 @@ def decide(clauses: list[Clause], raw_text: str) -> Classification:
     return cls                                                  # AMBIGUOUS
 
 
-def classify_request(text: str, llm=None) -> Classification:
-    """Deterministic rules first; `llm(text) -> 'DELETION'|'NOT_APPLICABLE'` only for AMBIGUOUS results (validated)."""
+def classify_request(text: str) -> Classification:
+    """Deterministic rules; an AMBIGUOUS result is never turned into an authorization (NOT_APPLICABLE, method "fallback")."""
     clauses = [label_clause(c) for c in split_clauses(text)]
     result = decide(clauses, text)
     if result.label != AMBIGUOUS:
         return result
-    if llm is not None:
-        try:
-            answer = llm(text)
-            if answer in (DELETION, NOT_APPLICABLE):
-                result.label, result.method = answer, "llm"
-                result.reasons.append("ambiguous wording resolved by the model (validated enum)")
-                return result
-        except Exception as e:  # noqa: BLE001
-            result.reasons.append(f"llm tie-breaker failed: {type(e).__name__}")
     result.label, result.method = NOT_APPLICABLE, "fallback"
     result.reasons.append("ambiguous and unresolved: not authorizing deletion (conservative)")
     return result
