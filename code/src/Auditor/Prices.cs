@@ -13,7 +13,16 @@ public static class Prices
 {
     public const string NotSupplied = "cost not computed - prices not supplied";
 
-    public static string DefaultPath => Path.Combine(AppContext.BaseDirectory, "config", "prices.json");
+    /// <summary><c>code/config/prices.json</c> of the repository the process runs in (found by walking up from the working directory), else next to the binaries. The file is local and never committed.</summary>
+    public static string DefaultPath
+    {
+        get
+        {
+            for (var dir = new DirectoryInfo(Directory.GetCurrentDirectory()); dir is not null; dir = dir.Parent)
+                if (Directory.Exists(Path.Combine(dir.FullName, "dataset"))) return Path.Combine(dir.FullName, "code", "config", "prices.json");
+            return Path.Combine(AppContext.BaseDirectory, "config", "prices.json");
+        }
+    }
 
     public sealed record Price(double InputPerMtok, double OutputPerMtok, double? CacheReadPerMtok, string SourceUrl, string Date)
     {

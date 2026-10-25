@@ -51,6 +51,9 @@ public static class Cli
         """;
 
     /// <summary>The repository root: the nearest folder, from the working directory up, that holds a dataset/ folder (falls back to the working directory).</summary>
+    /// <summary>Test seam: replaces the output validator for the current async flow only (so parallel tests never see each other's override).</summary>
+    public static readonly AsyncLocal<Func<string, Dataset, List<Issue>>?> ValidatorOverride = new();
+
     public static string RepoRoot()
     {
         for (var dir = new DirectoryInfo(Directory.GetCurrentDirectory()); dir is not null; dir = dir.Parent)
@@ -226,7 +229,7 @@ public static class Cli
         var (results, reused) = Checkpoint.AuditAll(auditor, ds.CaseOrder, ckpt);
         stderr.WriteLine($"checkpoint {Path.GetFileName(Path.ChangeExtension(outPath, ".partial.jsonl"))}: {ckpt.How}; {reused} of {results.Count} cases reused, {results.Count - reused} audited");
         OutputIo.Write(outPath, results.Select(x => new OutputIo.Row(x.CaseId, x.Status, x.Steps)));
-        var issues = Validator.ValidateOutputFile(outPath, ds);
+        var issues = (ValidatorOverride.Value ?? Validator.ValidateOutputFile)(outPath, ds);
         var errors = issues.Where(i => i.Severity == "error").ToList();
         var counts = StatusCounts(results);
 
