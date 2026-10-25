@@ -14,3 +14,7 @@ agent-trace/
 agent-trace.zip
 *.usage.jsonl
 *.partial.jsonl
+bin/
+obj/
+*.user
+TestResults/
